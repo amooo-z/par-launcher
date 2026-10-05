@@ -221,12 +221,16 @@ class MainActivity : Activity() {
                 DragEvent.ACTION_DROP -> {
                     val dragData = event.localState as? DraggedAppData ?: return@setOnDragListener false
                     val currentPos = layoutManager.findFirstVisibleItemPosition().coerceAtLeast(0)
-                    handleDropOnPage(dragData, currentPos, targetPos = -1)
+                    rvHomePager.post {
+                        handleDropOnPage(dragData, currentPos, targetPos = -1)
+                    }
                     true
                 }
                 DragEvent.ACTION_DRAG_ENDED -> {
-                    refreshFavoritesOnHome()
-                    refreshDock()
+                    rvHomePager.post {
+                        refreshFavoritesOnHome()
+                        refreshDock()
+                    }
                     true
                 }
                 else -> true
@@ -248,9 +252,6 @@ class MainActivity : Activity() {
             },
             onDragStarted = {
                 homePagerAdapter.hideAllBadges()
-            },
-            onItemDropped = { dragData, dropPos ->
-                handleDropOnDock(dragData, dropPos)
             }
         )
 
@@ -267,11 +268,15 @@ class MainActivity : Activity() {
                     val dragData = event.localState as? DraggedAppData ?: return@setOnDragListener false
                     val child = rvDock.findChildViewUnder(event.x, event.y)
                     val dropPos = if (child != null) rvDock.getChildAdapterPosition(child).coerceAtLeast(0) else -1
-                    handleDropOnDock(dragData, dropPos)
+                    rvDock.post {
+                        handleDropOnDock(dragData, dropPos)
+                    }
                     true
                 }
                 DragEvent.ACTION_DRAG_ENDED -> {
-                    refreshDock()
+                    rvDock.post {
+                        refreshDock()
+                    }
                     true
                 }
                 else -> true
@@ -283,7 +288,9 @@ class MainActivity : Activity() {
             when (event.action) {
                 DragEvent.ACTION_DROP -> {
                     val dragData = event.localState as? DraggedAppData ?: return@setOnDragListener false
-                    handleDropOutsideDock(dragData)
+                    btnOpenDrawer.post {
+                        handleDropOutsideDock(dragData)
+                    }
                     true
                 }
                 else -> true
@@ -294,12 +301,16 @@ class MainActivity : Activity() {
             when (event.action) {
                 DragEvent.ACTION_DROP -> {
                     val dragData = event.localState as? DraggedAppData ?: return@setOnDragListener false
-                    handleDropOutsideDock(dragData)
+                    homeContainer.post {
+                        handleDropOutsideDock(dragData)
+                    }
                     true
                 }
                 DragEvent.ACTION_DRAG_ENDED -> {
-                    refreshFavoritesOnHome()
-                    refreshDock()
+                    homeContainer.post {
+                        refreshFavoritesOnHome()
+                        refreshDock()
+                    }
                     true
                 }
                 else -> true

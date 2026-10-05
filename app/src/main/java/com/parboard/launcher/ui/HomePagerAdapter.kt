@@ -64,13 +64,7 @@ class HomePagerAdapter(
                 isDock = false,
                 colorProvider = colorProvider,
                 onColorPickerClick = onColorPickerClick,
-                onDragStarted = { hideAllBadges() },
-                onItemDropped = { dragData, dropPos ->
-                    val pagePos = bindingAdapterPosition
-                    if (pagePos != RecyclerView.NO_POSITION && pagePos in pages.indices) {
-                        onItemDroppedOnPage(dragData, pagePos, dropPos)
-                    }
-                }
+                onDragStarted = { hideAllBadges() }
             )
             rvGrid.adapter = gridAdapter
             activeAdapters.add(gridAdapter)
@@ -91,14 +85,18 @@ class HomePagerAdapter(
                             } else {
                                 pages[pagePos].size
                             }
-                            onItemDroppedOnPage(dragData, pagePos, dropPos)
+                            rvGrid.post {
+                                onItemDroppedOnPage(dragData, pagePos, dropPos)
+                            }
                             true
                         } else {
                             false
                         }
                     }
                     DragEvent.ACTION_DRAG_ENDED -> {
-                        gridAdapter.notifyDataSetChanged()
+                        rvGrid.post {
+                            gridAdapter.notifyDataSetChanged()
+                        }
                         true
                     }
                     else -> true

@@ -3,7 +3,6 @@ package com.parboard.launcher.ui
 import android.content.ClipData
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.view.DragEvent
 import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -22,8 +21,7 @@ class FavoritesAdapter(
     var isDock: Boolean = false,
     private val colorProvider: ((packageName: String) -> Int?)? = null,
     private val onColorPickerClick: ((AppItem) -> Unit)? = null,
-    private val onDragStarted: ((DraggedAppData) -> Unit)? = null,
-    private val onItemDropped: ((dragData: DraggedAppData, dropPos: Int) -> Unit)? = null
+    private val onDragStarted: ((DraggedAppData) -> Unit)? = null
 ) : RecyclerView.Adapter<FavoritesAdapter.FavoriteViewHolder>() {
 
     private var items: List<AppItem> = emptyList()
@@ -140,6 +138,11 @@ class FavoritesAdapter(
                         val dist = Math.hypot(dx.toDouble(), dy.toDouble())
                         if (dist > touchSlop) {
                             if (isLongPressed && !isDragging) {
+                                val pos = bindingAdapterPosition
+                                if (pos == RecyclerView.NO_POSITION) {
+                                    v.removeCallbacks(longPressRunnable)
+                                    return@setOnTouchListener false
+                                }
                                 isDragging = true
                                 hideAllColorBadges()
                                 val clipData = ClipData.newPlainText("app_drag", "${item.packageName}/${item.activityName}")
@@ -149,10 +152,10 @@ class FavoritesAdapter(
                                     activityName = item.activityName,
                                     source = if (isDock) "DOCK" else "PAGE",
                                     sourcePageIndex = pageIndex,
-                                    sourcePos = bindingAdapterPosition
+                                    sourcePos = pos
                                 )
                                 v.startDragAndDrop(clipData, shadow, dragData, 0)
-                                v.alpha = 0.35f
+                                v.alpha = 0.4f
                                 onDragStarted?.invoke(dragData)
                                 true
                             } else if (!isLongPressed) {
@@ -178,31 +181,6 @@ class FavoritesAdapter(
                         isLongPressed = false
                         isDragging = false
                         false
-                    }
-                    else -> false
-                }
-            }
-
-            // Drop listener on individual item: captures drops directly onto icons
-            itemView.setOnDragListener { v, event ->
-                when (event.action) {
-                    DragEvent.ACTION_DRAG_STARTED -> true
-                    DragEvent.ACTION_DROP -> {
-                        val dragData = event.localState as? DraggedAppData
-                        if (dragData != null) {
-                            val pos = bindingAdapterPosition
-                            if (pos != RecyclerView.NO_POSITION) {
-                                onItemDropped?.invoke(dragData, pos)
-                                true
-                            } else false
-                        } else false
-                    }
-                    DragEvent.ACTION_DRAG_ENDED -> {
-                        v.animate().cancel()
-                        v.scaleX = 1.0f
-                        v.scaleY = 1.0f
-                        v.alpha = 1.0f
-                        true
                     }
                     else -> false
                 }
