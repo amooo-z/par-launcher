@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.InputMethodManager
@@ -27,7 +28,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
@@ -36,6 +36,7 @@ import com.parboard.launcher.data.AppRepository
 import com.parboard.launcher.data.FavoritesRepository
 import com.parboard.launcher.data.FavoritesRepository.LayoutMode
 import com.parboard.launcher.model.AppItem
+import com.parboard.launcher.model.DraggedAppData
 import com.parboard.launcher.util.AppLauncher
 import com.parboard.launcher.util.DateFormatter
 import com.parboard.launcher.util.DefaultRoleHelper
@@ -73,6 +74,7 @@ class MainActivity : Activity() {
     private lateinit var appAdapter: AppAdapter
 
     private var allApps: List<AppItem> = emptyList()
+    private var lastPageFlipTime: Long = 0L
 
     private val timeTickReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -140,6 +142,7 @@ class MainActivity : Activity() {
             refreshFavoritesOnHome()
             rvHomePager.post {
                 rvHomePager.smoothScrollToPosition(newPageIdx)
+                updatePageDots(newPageIdx, homePagerAdapter.itemCount)
             }
             Toast.makeText(this, "صفحه جدید اضافه شد", Toast.LENGTH_SHORT).show()
         }
@@ -158,8 +161,8 @@ class MainActivity : Activity() {
             onAppClick = { item ->
                 AppLauncher.launch(this, item)
             },
-            onItemMovedWithinPage = { pageIndex, fromPos, toPos ->
-                favoritesRepository.swapFavorites(pageIndex, fromPos, toPos)
+            onItemDroppedOnPage = { dragData, targetPage, targetPos ->
+                handleDropOnPage(dragData, targetPage, targetPos)
             },
             colorProvider = { pkg ->
                 favoritesRepository.getIconColor(pkg)
@@ -188,6 +191,47 @@ class MainActivity : Activity() {
                 }
             }
         })
+
+        // Edge scrolling between pages during Drag & Drop
+        rvHomePager.setOnDragListener { _, event ->
+            when (event.action) {
+                DragEvent.ACTION_DRAG_LOCATION -> {
+                    val width = rvHomePager.width
+                    val x = event.x
+                    val now = System.currentTimeMillis()
+                    if (now - lastPageFlipTime > 550) {
+                        val currentPos = layoutManager.findFirstVisibleItemPosition()
+                        val totalPages = homePagerAdapter.itemCount
+                        val edgeMargin = 65 * resources.displayMetrics.density
+
+                        if (x > width - edgeMargin) {
+                            if (currentPos < totalPages - 1) {
+                                rvHomePager.smoothScrollToPosition(currentPos + 1)
+                                lastPageFlipTime = now
+                            }
+                        } else if (x < edgeMargin) {
+                            if (currentPos > 0) {
+                                rvHomePager.smoothScrollToPosition(currentPos - 1)
+                                lastPageFlipTime = now
+                            }
+                        }
+                    }
+                    true
+                }
+                DragEvent.ACTION_DROP -> {
+                    val dragData = event.localState as? DraggedAppData ?: return@setOnDragListener false
+                    val currentPos = layoutManager.findFirstVisibleItemPosition().coerceAtLeast(0)
+                    handleDropOnPage(dragData, currentPos, targetPos = -1)
+                    true
+                }
+                DragEvent.ACTION_DRAG_ENDED -> {
+                    refreshFavoritesOnHome()
+                    refreshDock()
+                    true
+                }
+                else -> true
+            }
+        }
     }
 
     private fun setupDock() {
@@ -195,41 +239,82 @@ class MainActivity : Activity() {
             onItemClick = { item ->
                 AppLauncher.launch(this, item)
             },
-            onItemLongClick = null,
+            isDock = true,
             colorProvider = { pkg ->
                 favoritesRepository.getIconColor(pkg)
             },
             onColorPickerClick = { item ->
                 showColorPickerDialog(item)
+            },
+            onDragStarted = {
+                homePagerAdapter.hideAllBadges()
             }
         )
 
         rvDock.layoutManager = GridLayoutManager(this, 5)
         rvDock.adapter = dockAdapter
 
-        val callback = object : ItemTouchHelper.SimpleCallback(
-            ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT,
-            0
-        ) {
-            override fun onMove(
-                recyclerView: RecyclerView,
-                viewHolder: RecyclerView.ViewHolder,
-                target: RecyclerView.ViewHolder
-            ): Boolean {
-                val fromPos = viewHolder.bindingAdapterPosition
-                val toPos = target.bindingAdapterPosition
-                if (fromPos != RecyclerView.NO_POSITION && toPos != RecyclerView.NO_POSITION) {
-                    favoritesRepository.swapDockApps(fromPos, toPos)
-                    refreshDock()
-                    return true
+        // Listen for drops into bottom dock
+        rvDock.setOnDragListener { _, event ->
+            when (event.action) {
+                DragEvent.ACTION_DROP -> {
+                    val dragData = event.localState as? DraggedAppData ?: return@setOnDragListener false
+                    val child = rvDock.findChildViewUnder(event.x, event.y)
+                    val dropPos = if (child != null) rvDock.getChildAdapterPosition(child).coerceAtLeast(0) else -1
+                    handleDropOnDock(dragData, dropPos)
+                    true
                 }
-                return false
+                DragEvent.ACTION_DRAG_ENDED -> {
+                    refreshDock()
+                    true
+                }
+                else -> true
             }
-
-            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
-            override fun isLongPressDragEnabled(): Boolean = true
         }
-        ItemTouchHelper(callback).attachToRecyclerView(rvDock)
+    }
+
+    private fun handleDropOnDock(dragData: DraggedAppData, dropPos: Int) {
+        val dockApps = favoritesRepository.getDockApps()
+        if (dragData.source == "DOCK") {
+            // Reordering within dock
+            val target = if (dropPos != -1) dropPos.coerceIn(0, (dockApps.size - 1).coerceAtLeast(0)) else (dockApps.size - 1).coerceAtLeast(0)
+            favoritesRepository.swapDockApps(dragData.sourcePos, target)
+            refreshDock()
+        } else {
+            // Dragged from home page into dock
+            if (dockApps.size >= 5) {
+                Toast.makeText(this, "داک پر است (حداکثر ۵ برنامه)", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val item = favoritesRepository.removeFavoriteAt(dragData.sourcePageIndex, dragData.sourcePos) ?: return
+            val target = if (dropPos != -1) dropPos else dockApps.size
+            favoritesRepository.addDockAppAt(target, item)
+            refreshDock()
+            refreshFavoritesOnHome()
+            Toast.makeText(this, "به داک اضافه شد", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun handleDropOnPage(dragData: DraggedAppData, targetPage: Int, targetPos: Int) {
+        if (dragData.source == "DOCK") {
+            // Dragged OUT of dock onto home page
+            val item = favoritesRepository.removeDockAppAt(dragData.sourcePos) ?: return
+            val pos = if (targetPos != -1) targetPos else 0
+            favoritesRepository.addFavoriteAt(targetPage, pos, item)
+            refreshDock()
+            refreshFavoritesOnHome()
+            Toast.makeText(this, "از داک به صفحه منتقل شد", Toast.LENGTH_SHORT).show()
+        } else {
+            // Moving between pages or within same page
+            val pos = if (targetPos != -1) targetPos else 0
+            favoritesRepository.moveFavorite(
+                fromPage = dragData.sourcePageIndex,
+                fromPos = dragData.sourcePos,
+                toPage = targetPage,
+                toPos = pos
+            )
+            refreshFavoritesOnHome()
+        }
     }
 
     private fun updatePageDots(currentPage: Int, totalPages: Int) {
@@ -320,7 +405,6 @@ class MainActivity : Activity() {
         layoutSearchBar.visibility = View.GONE
         layoutSelectionBar.visibility = View.VISIBLE
 
-        // Dismiss keyboard when entering multi-select
         val imm = getSystemService(InputMethodManager::class.java)
         imm?.hideSoftInputFromWindow(etSearch.windowToken, 0)
 
@@ -367,7 +451,6 @@ class MainActivity : Activity() {
         appAdapter.submitList(allApps)
         etSearch.requestFocus()
 
-        // Immediate keyboard popup
         val insetsController = WindowInsetsControllerCompat(window, etSearch)
         insetsController.show(WindowInsetsCompat.Type.ime())
 
@@ -406,6 +489,13 @@ class MainActivity : Activity() {
     private fun loadApps() {
         allApps = appRepository.loadInstalledApps()
         appAdapter.submitList(allApps)
+
+        // If in ALL_APPS mode and repository has no pages yet, populate all apps
+        if (favoritesRepository.getLayoutMode() == LayoutMode.ALL_APPS && favoritesRepository.getFavorites().isEmpty()) {
+            val chunked = allApps.chunked(25).map { page -> page.map { Pair(it.packageName, it.activityName) } }
+            favoritesRepository.savePages(chunked)
+        }
+
         refreshFavoritesOnHome()
     }
 
@@ -415,36 +505,33 @@ class MainActivity : Activity() {
         if (currentMode == LayoutMode.ALL_APPS) {
             btnOpenDrawer.visibility = View.GONE
             tvFavoritesTitle.visibility = View.GONE
-            val pages = if (allApps.isEmpty()) listOf(emptyList()) else allApps.chunked(25)
-            homePagerAdapter.submitPages(pages)
-            updatePageDots(0, pages.size)
         } else {
             btnOpenDrawer.visibility = View.VISIBLE
             tvFavoritesTitle.visibility = View.VISIBLE
             tvFavoritesTitle.text = "برنامه‌های برگزیده"
-
-            val storedPages = favoritesRepository.getPages()
-            val validPages = ArrayList<List<AppItem>>()
-
-            for (page in storedPages) {
-                val pageApps = ArrayList<AppItem>()
-                for (fav in page) {
-                    val matchingApp = allApps.firstOrNull { it.packageName == fav.first && it.activityName == fav.second }
-                    if (matchingApp != null) {
-                        pageApps.add(matchingApp)
-                    }
-                }
-                // Preserving empty pages as configured
-                validPages.add(pageApps)
-            }
-
-            val finalPages = if (validPages.isEmpty()) listOf(emptyList()) else validPages
-            homePagerAdapter.submitPages(finalPages)
-
-            val layoutManager = rvHomePager.layoutManager as? LinearLayoutManager
-            val currentPos = layoutManager?.findFirstVisibleItemPosition()?.coerceAtLeast(0) ?: 0
-            updatePageDots(currentPos.coerceIn(0, (finalPages.size - 1).coerceAtLeast(0)), finalPages.size)
         }
+
+        val storedPages = favoritesRepository.getPages()
+        val validPages = ArrayList<List<AppItem>>()
+
+        for (page in storedPages) {
+            val pageApps = ArrayList<AppItem>()
+            for (fav in page) {
+                val matchingApp = allApps.firstOrNull { it.packageName == fav.first && it.activityName == fav.second }
+                if (matchingApp != null) {
+                    pageApps.add(matchingApp)
+                }
+            }
+            validPages.add(pageApps)
+        }
+
+        val finalPages = if (validPages.isEmpty()) listOf(emptyList()) else validPages
+        homePagerAdapter.submitPages(finalPages)
+
+        val layoutManager = rvHomePager.layoutManager as? LinearLayoutManager
+        val currentPos = layoutManager?.findFirstVisibleItemPosition()?.coerceAtLeast(0) ?: 0
+        updatePageDots(currentPos.coerceIn(0, (finalPages.size - 1).coerceAtLeast(0)), finalPages.size)
+
         refreshDock()
     }
 
@@ -695,6 +782,12 @@ class MainActivity : Activity() {
                         favoritesRepository.setLayoutMode(newMode)
                         val modeName = if (newMode == LayoutMode.ALL_APPS) "تمام برنامه‌ها در صفحه اصلی" else "با اپ دراور"
                         Toast.makeText(this, "حالت چیدمان: $modeName", Toast.LENGTH_SHORT).show()
+
+                        if (newMode == LayoutMode.ALL_APPS && favoritesRepository.getFavorites().isEmpty()) {
+                            val chunked = allApps.chunked(25).map { page -> page.map { Pair(it.packageName, it.activityName) } }
+                            favoritesRepository.savePages(chunked)
+                        }
+
                         refreshFavoritesOnHome()
                     }
                     1 -> {
@@ -728,7 +821,6 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        // Register package updates
         appRepository.registerPackageCallback {
             loadApps()
         }

@@ -1,18 +1,18 @@
 package com.parboard.launcher.ui
 
+import android.view.DragEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.parboard.launcher.R
 import com.parboard.launcher.model.AppItem
-import java.util.Collections
+import com.parboard.launcher.model.DraggedAppData
 
 class HomePagerAdapter(
     private val onAppClick: (AppItem) -> Unit,
-    private val onItemMovedWithinPage: (pageIndex: Int, fromPos: Int, toPos: Int) -> Unit,
+    private val onItemDroppedOnPage: (dragData: DraggedAppData, targetPage: Int, targetPos: Int) -> Unit,
     private val colorProvider: (String) -> Int?,
     private val onColorPickerClick: (AppItem) -> Unit
 ) : RecyclerView.Adapter<HomePagerAdapter.PageViewHolder>() {
@@ -31,6 +31,12 @@ class HomePagerAdapter(
         }
     }
 
+    fun showBadgeFor(packageName: String) {
+        for (adapter in activeAdapters) {
+            adapter.showColorBadgeFor(packageName)
+        }
+    }
+
     override fun getItemCount(): Int = pages.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageViewHolder {
@@ -39,7 +45,7 @@ class HomePagerAdapter(
     }
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        holder.bind(pages[position])
+        holder.bind(pages[position], position)
     }
 
     inner class PageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -48,79 +54,50 @@ class HomePagerAdapter(
 
         init {
             rvGrid.layoutManager = GridLayoutManager(itemView.context, 5)
-            rvGrid.setHasFixedSize(true)
             gridAdapter = FavoritesAdapter(
                 onItemClick = { item -> onAppClick(item) },
-                onItemLongClick = null,
+                pageIndex = 0,
+                isDock = false,
                 colorProvider = colorProvider,
-                onColorPickerClick = onColorPickerClick
+                onColorPickerClick = onColorPickerClick,
+                onDragStarted = { hideAllBadges() }
             )
             rvGrid.adapter = gridAdapter
             activeAdapters.add(gridAdapter)
 
-            val callback = object : ItemTouchHelper.SimpleCallback(
-                ItemTouchHelper.UP or ItemTouchHelper.DOWN or ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT,
-                0
-            ) {
-                override fun onMove(
-                    recyclerView: RecyclerView,
-                    viewHolder: RecyclerView.ViewHolder,
-                    target: RecyclerView.ViewHolder
-                ): Boolean {
-                    gridAdapter.hideAllColorBadges()
-                    val pagePos = bindingAdapterPosition
-                    if (pagePos == RecyclerView.NO_POSITION || pagePos !in pages.indices) return false
-                    val pageList = pages[pagePos]
-                    val fromPos = viewHolder.bindingAdapterPosition
-                    val toPos = target.bindingAdapterPosition
-                    if (fromPos != RecyclerView.NO_POSITION && toPos != RecyclerView.NO_POSITION) {
-                        Collections.swap(pageList, fromPos, toPos)
-                        gridAdapter.notifyItemMoved(fromPos, toPos)
-                        onItemMovedWithinPage(pagePos, fromPos, toPos)
-                        return true
-                    }
-                    return false
-                }
-
-                override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
-                    super.onSelectedChanged(viewHolder, actionState)
-                    if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
-                        gridAdapter.hideAllColorBadges()
-                        viewHolder?.itemView?.animate()
-                            ?.scaleX(1.15f)
-                            ?.scaleY(1.15f)
-                            ?.alpha(0.85f)
-                            ?.setDuration(150)
-                            ?.start()
-                    }
-                }
-
-                override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
-                    super.clearView(recyclerView, viewHolder)
-                    viewHolder.itemView.animate()
-                        ?.scaleX(1.0f)
-                        ?.scaleY(1.0f)
-                        ?.alpha(1.0f)
-                        ?.setDuration(150)
-                        ?.start()
-
-                    val pos = viewHolder.bindingAdapterPosition
-                    val pagePos = bindingAdapterPosition
-                    if (pagePos in pages.indices) {
-                        val pageList = pages[pagePos]
-                        if (pos in pageList.indices) {
-                            gridAdapter.showColorBadgeFor(pageList[pos].packageName)
+            // Listen for drops onto this page's grid
+            rvGrid.setOnDragListener { _, event ->
+                when (event.action) {
+                    DragEvent.ACTION_DRAG_STARTED -> true
+                    DragEvent.ACTION_DRAG_ENTERED -> true
+                    DragEvent.ACTION_DRAG_LOCATION -> true
+                    DragEvent.ACTION_DROP -> {
+                        val dragData = event.localState as? DraggedAppData ?: return@setOnDragListener false
+                        val pagePos = bindingAdapterPosition
+                        if (pagePos != RecyclerView.NO_POSITION && pagePos in pages.indices) {
+                            val child = rvGrid.findChildViewUnder(event.x, event.y)
+                            val dropPos = if (child != null) {
+                                rvGrid.getChildAdapterPosition(child).coerceAtLeast(0)
+                            } else {
+                                pages[pagePos].size
+                            }
+                            onItemDroppedOnPage(dragData, pagePos, dropPos)
+                            true
+                        } else {
+                            false
                         }
                     }
+                    DragEvent.ACTION_DRAG_ENDED -> {
+                        gridAdapter.notifyDataSetChanged()
+                        true
+                    }
+                    else -> true
                 }
-
-                override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
-                override fun isLongPressDragEnabled(): Boolean = true
             }
-            ItemTouchHelper(callback).attachToRecyclerView(rvGrid)
         }
 
-        fun bind(pageItems: MutableList<AppItem>) {
+        fun bind(pageItems: MutableList<AppItem>, pageIndex: Int) {
+            gridAdapter.pageIndex = pageIndex
             gridAdapter.submitList(pageItems)
         }
     }

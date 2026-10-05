@@ -18,6 +18,7 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
         private const val ITEM_SEPARATOR = "\n"
         private const val COMPONENT_SEPARATOR = "/"
         private const val PAGE_SEPARATOR = "\n===PAGE===\n"
+        private const val PAGE_PREFIX = "PAGE:"
 
         fun create(context: Context): FavoritesRepository {
             return FavoritesRepository(context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE))
@@ -36,14 +37,15 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
         val pages = ArrayList<List<Pair<String, String>>>()
 
         for (rawPage in rawPages) {
-            pages.add(parseItems(rawPage))
+            val content = if (rawPage.startsWith(PAGE_PREFIX)) rawPage.removePrefix(PAGE_PREFIX) else rawPage
+            pages.add(parseItems(content))
         }
 
         return if (pages.isEmpty()) listOf(emptyList()) else pages
     }
 
     /**
-     * Saves all pages preserving empty pages.
+     * Saves all pages preserving empty pages using a prefix marker.
      */
     fun savePages(pages: List<List<Pair<String, String>>>) {
         if (pages.isEmpty()) {
@@ -52,7 +54,7 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
         }
 
         val serialized = pages.joinToString(PAGE_SEPARATOR) { page ->
-            page.joinToString(ITEM_SEPARATOR) { "${it.first}$COMPONENT_SEPARATOR${it.second}" }
+            PAGE_PREFIX + page.joinToString(ITEM_SEPARATOR) { "${it.first}$COMPONENT_SEPARATOR${it.second}" }
         }
         prefs.edit().putString(KEY_FAVORITES, serialized).apply()
     }
@@ -105,7 +107,6 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
 
         for (item in items) {
             if (!isFavorite(item.first, item.second)) {
-                // Add to last page
                 pages[pages.lastIndex].add(item)
                 addedCount++
             }
@@ -139,27 +140,33 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
         return found
     }
 
+    fun removeFavoriteAt(pageIndex: Int, pos: Int): Pair<String, String>? {
+        val pages = getPages().map { it.toMutableList() }.toMutableList()
+        if (pageIndex !in 0..pages.lastIndex) return null
+        val page = pages[pageIndex]
+        if (pos !in 0..page.lastIndex) return null
+        val item = page.removeAt(pos)
+        savePages(pages)
+        return item
+    }
+
+    fun addFavoriteAt(pageIndex: Int, pos: Int, item: Pair<String, String>) {
+        val pages = getPages().map { it.toMutableList() }.toMutableList()
+        while (pages.size <= pageIndex) {
+            pages.add(mutableListOf())
+        }
+        val page = pages[pageIndex]
+        val clampedPos = pos.coerceIn(0, page.size)
+        page.add(clampedPos, item)
+        savePages(pages)
+    }
+
     /**
      * Moves a favorite item between pages or within the same page.
      */
     fun moveFavorite(fromPage: Int, fromPos: Int, toPage: Int, toPos: Int) {
-        val pages = getPages().map { it.toMutableList() }.toMutableList()
-        if (fromPage !in 0..pages.lastIndex) return
-        val sourcePage = pages[fromPage]
-        if (fromPos !in 0..sourcePage.lastIndex) return
-
-        val item = sourcePage.removeAt(fromPos)
-
-        // If toPage is beyond current pages, create new page
-        while (pages.size <= toPage) {
-            pages.add(mutableListOf())
-        }
-
-        val targetPage = pages[toPage]
-        val clampedPos = toPos.coerceIn(0, targetPage.size)
-        targetPage.add(clampedPos, item)
-
-        savePages(pages)
+        val item = removeFavoriteAt(fromPage, fromPos) ?: return
+        addFavoriteAt(toPage, toPos, item)
     }
 
     /**
@@ -238,6 +245,23 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
         val capped = apps.take(5)
         val serialized = capped.joinToString(ITEM_SEPARATOR) { "${it.first}$COMPONENT_SEPARATOR${it.second}" }
         prefs.edit().putString(KEY_DOCK_APPS, serialized).apply()
+    }
+
+    fun removeDockAppAt(pos: Int): Pair<String, String>? {
+        val apps = getDockApps().toMutableList()
+        if (pos !in 0..apps.lastIndex) return null
+        val item = apps.removeAt(pos)
+        saveDockApps(apps)
+        return item
+    }
+
+    fun addDockAppAt(pos: Int, item: Pair<String, String>): Boolean {
+        val apps = getDockApps().toMutableList()
+        if (apps.size >= 5) return false
+        val clampedPos = pos.coerceIn(0, apps.size)
+        apps.add(clampedPos, item)
+        saveDockApps(apps)
+        return true
     }
 
     fun swapDockApps(fromPos: Int, toPos: Int) {
