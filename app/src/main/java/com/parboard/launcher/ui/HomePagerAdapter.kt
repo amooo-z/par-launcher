@@ -12,14 +12,23 @@ import java.util.Collections
 
 class HomePagerAdapter(
     private val onAppClick: (AppItem) -> Unit,
-    private val onItemMovedWithinPage: (pageIndex: Int, fromPos: Int, toPos: Int) -> Unit
+    private val onItemMovedWithinPage: (pageIndex: Int, fromPos: Int, toPos: Int) -> Unit,
+    private val colorProvider: (String) -> Int?,
+    private val onColorPickerClick: (AppItem) -> Unit
 ) : RecyclerView.Adapter<HomePagerAdapter.PageViewHolder>() {
 
     private var pages: MutableList<MutableList<AppItem>> = mutableListOf()
+    private val activeAdapters = mutableListOf<FavoritesAdapter>()
 
     fun submitPages(newPages: List<List<AppItem>>) {
         pages = newPages.map { it.toMutableList() }.toMutableList()
         notifyDataSetChanged()
+    }
+
+    fun hideAllBadges() {
+        for (adapter in activeAdapters) {
+            adapter.hideAllColorBadges()
+        }
     }
 
     override fun getItemCount(): Int = pages.size
@@ -42,9 +51,12 @@ class HomePagerAdapter(
             rvGrid.setHasFixedSize(true)
             gridAdapter = FavoritesAdapter(
                 onItemClick = { item -> onAppClick(item) },
-                onItemLongClick = null // No dialog popup - pure drag & drop!
+                onItemLongClick = null,
+                colorProvider = colorProvider,
+                onColorPickerClick = onColorPickerClick
             )
             rvGrid.adapter = gridAdapter
+            activeAdapters.add(gridAdapter)
 
             val callback = object : ItemTouchHelper.SimpleCallback(
                 ItemTouchHelper.UP or ItemTouchHelper.DOWN or ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT,
@@ -55,6 +67,7 @@ class HomePagerAdapter(
                     viewHolder: RecyclerView.ViewHolder,
                     target: RecyclerView.ViewHolder
                 ): Boolean {
+                    gridAdapter.hideAllColorBadges()
                     val pagePos = bindingAdapterPosition
                     if (pagePos == RecyclerView.NO_POSITION || pagePos !in pages.indices) return false
                     val pageList = pages[pagePos]
@@ -72,6 +85,7 @@ class HomePagerAdapter(
                 override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
                     super.onSelectedChanged(viewHolder, actionState)
                     if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                        gridAdapter.hideAllColorBadges()
                         viewHolder?.itemView?.animate()
                             ?.scaleX(1.15f)
                             ?.scaleY(1.15f)
@@ -89,6 +103,15 @@ class HomePagerAdapter(
                         ?.alpha(1.0f)
                         ?.setDuration(150)
                         ?.start()
+
+                    val pos = viewHolder.bindingAdapterPosition
+                    val pagePos = bindingAdapterPosition
+                    if (pagePos in pages.indices) {
+                        val pageList = pages[pagePos]
+                        if (pos in pageList.indices) {
+                            gridAdapter.showColorBadgeFor(pageList[pos].packageName)
+                        }
+                    }
                 }
 
                 override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}

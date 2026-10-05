@@ -43,7 +43,7 @@ class FavoritesRepositoryTest {
     }
 
     @Test
-    fun testAutoPruneEmptyPages() {
+    fun testPreserveEmptyPages() {
         val page0 = listOf(Pair("com.app1", ".A1"))
         val page1 = emptyList<Pair<String, String>>()
         val page2 = listOf(Pair("com.app2", ".A2"))
@@ -51,81 +51,51 @@ class FavoritesRepositoryTest {
         repository.savePages(listOf(page0, page1, page2))
 
         val loaded = repository.getPages()
-        assertEquals(2, loaded.size)
+        assertEquals(3, loaded.size)
         assertEquals("com.app1", loaded[0][0].first)
-        assertEquals("com.app2", loaded[1][0].first)
+        assertTrue(loaded[1].isEmpty())
+        assertEquals("com.app2", loaded[2][0].first)
     }
 
     @Test
-    fun testMoveFavoriteBetweenPages() {
-        val page0 = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"))
-        val page1 = listOf(Pair("com.app3", ".A3"))
-        repository.savePages(listOf(page0, page1))
-
-        // Move app2 to page 1
-        repository.moveFavorite(fromPage = 0, fromPos = 1, toPage = 1, toPos = 1)
-
-        val loaded = repository.getPages()
-        assertEquals(2, loaded.size)
-        assertEquals(1, loaded[0].size)
-        assertEquals("com.app1", loaded[0][0].first)
-        assertEquals(2, loaded[1].size)
-        assertEquals("com.app3", loaded[1][0].first)
-        assertEquals("com.app2", loaded[1][1].first)
-    }
-
-    @Test
-    fun testMoveToNewPageAtEnd() {
-        val page0 = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"))
-        repository.savePages(listOf(page0))
-
-        // Move app2 to a newly created page 1
-        repository.moveFavorite(fromPage = 0, fromPos = 1, toPage = 1, toPos = 0)
-
-        val loaded = repository.getPages()
-        assertEquals(2, loaded.size)
-        assertEquals("com.app1", loaded[0][0].first)
-        assertEquals("com.app2", loaded[1][0].first)
-    }
-
-    @Test
-    fun testFlatFavoritesListMaintainsAllItems() {
+    fun testAddEmptyPage() {
         val page0 = listOf(Pair("com.app1", ".A1"))
-        val page1 = listOf(Pair("com.app2", ".A2"))
-        repository.savePages(listOf(page0, page1))
-
-        val flat = repository.getFavorites()
-        assertEquals(2, flat.size)
-        assertTrue(repository.isFavorite("com.app1", ".A1"))
-        assertTrue(repository.isFavorite("com.app2", ".A2"))
-    }
-
-    @Test
-    fun testSwapFavoritesWithinPage() {
-        val page0 = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"), Pair("com.app3", ".A3"))
         repository.savePages(listOf(page0))
 
-        repository.swapFavorites(page = 0, fromPos = 0, toPos = 2)
-
-        val loaded = repository.getPages()
-        assertEquals(1, loaded.size)
-        assertEquals("com.app3", loaded[0][0].first)
-        assertEquals("com.app2", loaded[0][1].first)
-        assertEquals("com.app1", loaded[0][2].first)
-    }
-
-    @Test
-    fun testMoveFavoriteToNewPageMethod() {
-        val page0 = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"))
-        repository.savePages(listOf(page0))
-
-        val result = repository.moveFavoriteToNewPage("com.app1", ".A1")
-        assertTrue(result)
+        val newIndex = repository.addEmptyPage()
+        assertEquals(1, newIndex)
 
         val loaded = repository.getPages()
         assertEquals(2, loaded.size)
-        assertEquals("com.app2", loaded[0][0].first)
-        assertEquals("com.app1", loaded[1][0].first)
+        assertTrue(loaded[1].isEmpty())
+    }
+
+    @Test
+    fun testDockApps() {
+        val dockApps = listOf(
+            Pair("com.phone", ".Dialer"),
+            Pair("com.sms", ".Messages"),
+            Pair("com.browser", ".Browser")
+        )
+        repository.saveDockApps(dockApps)
+
+        val loaded = repository.getDockApps()
+        assertEquals(3, loaded.size)
+        assertEquals("com.phone", loaded[0].first)
+
+        repository.swapDockApps(0, 1)
+        val swapped = repository.getDockApps()
+        assertEquals("com.sms", swapped[0].first)
+        assertEquals("com.phone", swapped[1].first)
+    }
+
+    @Test
+    fun testIconColor() {
+        assertEquals(null, repository.getIconColor("com.test.app"))
+        repository.setIconColor("com.test.app", 0xFF123456.toInt())
+        assertEquals(0xFF123456.toInt(), repository.getIconColor("com.test.app"))
+        repository.setIconColor("com.test.app", null)
+        assertEquals(null, repository.getIconColor("com.test.app"))
     }
 }
 

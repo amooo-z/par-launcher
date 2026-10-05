@@ -104,16 +104,45 @@
             android:clipToPadding="false"
             android:overScrollMode="never" />
 
-        <!-- Page Indicator Dots -->
-        <LinearLayout
-            android:id="@+id/layout_page_dots"
+        <!-- Page Indicator Dots & Add Page '+' Button -->
+        <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:paddingTop="4dp"
-            android:paddingBottom="10dp"
-            android:visibility="gone" />
+            android:paddingTop="2dp"
+            android:paddingBottom="6dp">
+
+            <LinearLayout
+                android:id="@+id/layout_page_dots"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/btn_add_page"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:gravity="center"
+                android:text="+"
+                android:textColor="@color/text_secondary"
+                android:textSize="22sp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true" />
+
+        </RelativeLayout>
+
+        <!-- Bottom Fixed Dock (Samsung One UI style: 5 apps) -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_dock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:overScrollMode="never" />
 
         <!-- Search Trigger / Swipe-up indicator -->
         <LinearLayout

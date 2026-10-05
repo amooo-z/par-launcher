@@ -6,10 +6,15 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -21,6 +26,8 @@ import android.window.OnBackInvokedDispatcher
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
@@ -47,7 +54,10 @@ class MainActivity : Activity() {
     private lateinit var btnOpenDrawer: View
     private lateinit var rvHomePager: RecyclerView
     private lateinit var layoutPageDots: LinearLayout
+    private lateinit var btnAddPage: TextView
+    private lateinit var rvDock: RecyclerView
     private lateinit var homePagerAdapter: HomePagerAdapter
+    private lateinit var dockAdapter: FavoritesAdapter
     private lateinit var pagerSnapHelper: PagerSnapHelper
 
     // Drawer search & selection
@@ -85,6 +95,7 @@ class MainActivity : Activity() {
 
         initViews()
         setupHomePager()
+        setupDock()
         setupDrawerRecyclerView()
         setupSearch()
         setupSelectionBar()
@@ -102,6 +113,8 @@ class MainActivity : Activity() {
         btnOpenDrawer = findViewById(R.id.btn_open_drawer)
         rvHomePager = findViewById(R.id.rv_home_pager)
         layoutPageDots = findViewById(R.id.layout_page_dots)
+        btnAddPage = findViewById(R.id.btn_add_page)
+        rvDock = findViewById(R.id.rv_dock)
 
         // Drawer components
         layoutSearchBar = findViewById(R.id.layout_search_bar)
@@ -122,6 +135,15 @@ class MainActivity : Activity() {
             showSettingsDialog()
         }
 
+        btnAddPage.setOnClickListener {
+            val newPageIdx = favoritesRepository.addEmptyPage()
+            refreshFavoritesOnHome()
+            rvHomePager.post {
+                rvHomePager.smoothScrollToPosition(newPageIdx)
+            }
+            Toast.makeText(this, "صفحه جدید اضافه شد", Toast.LENGTH_SHORT).show()
+        }
+
         tvDefaultPrompt.setOnClickListener {
             try {
                 startActivity(DefaultRoleHelper.createSetDefaultIntent(this))
@@ -138,6 +160,12 @@ class MainActivity : Activity() {
             },
             onItemMovedWithinPage = { pageIndex, fromPos, toPos ->
                 favoritesRepository.swapFavorites(pageIndex, fromPos, toPos)
+            },
+            colorProvider = { pkg ->
+                favoritesRepository.getIconColor(pkg)
+            },
+            onColorPickerClick = { item ->
+                showColorPickerDialog(item)
             }
         )
 
@@ -150,6 +178,7 @@ class MainActivity : Activity() {
 
         rvHomePager.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                homePagerAdapter.hideAllBadges()
                 if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                     val snapView = pagerSnapHelper.findSnapView(layoutManager)
                     if (snapView != null) {
@@ -159,6 +188,48 @@ class MainActivity : Activity() {
                 }
             }
         })
+    }
+
+    private fun setupDock() {
+        dockAdapter = FavoritesAdapter(
+            onItemClick = { item ->
+                AppLauncher.launch(this, item)
+            },
+            onItemLongClick = null,
+            colorProvider = { pkg ->
+                favoritesRepository.getIconColor(pkg)
+            },
+            onColorPickerClick = { item ->
+                showColorPickerDialog(item)
+            }
+        )
+
+        rvDock.layoutManager = GridLayoutManager(this, 5)
+        rvDock.adapter = dockAdapter
+
+        val callback = object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT,
+            0
+        ) {
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                val fromPos = viewHolder.bindingAdapterPosition
+                val toPos = target.bindingAdapterPosition
+                if (fromPos != RecyclerView.NO_POSITION && toPos != RecyclerView.NO_POSITION) {
+                    favoritesRepository.swapDockApps(fromPos, toPos)
+                    refreshDock()
+                    return true
+                }
+                return false
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+            override fun isLongPressDragEnabled(): Boolean = true
+        }
+        ItemTouchHelper(callback).attachToRecyclerView(rvDock)
     }
 
     private fun updatePageDots(currentPage: Int, totalPages: Int) {
@@ -200,7 +271,6 @@ class MainActivity : Activity() {
             }
         )
         rvApps.layoutManager = LinearLayoutManager(this)
-        rvApps.setHasFixedSize(true)
         rvApps.adapter = appAdapter
     }
 
@@ -345,7 +415,6 @@ class MainActivity : Activity() {
         if (currentMode == LayoutMode.ALL_APPS) {
             btnOpenDrawer.visibility = View.GONE
             tvFavoritesTitle.visibility = View.GONE
-            // In ALL_APPS mode, paginate allApps (25 apps per page)
             val pages = if (allApps.isEmpty()) listOf(emptyList()) else allApps.chunked(25)
             homePagerAdapter.submitPages(pages)
             updatePageDots(0, pages.size)
@@ -355,26 +424,18 @@ class MainActivity : Activity() {
             tvFavoritesTitle.text = "برنامه‌های برگزیده"
 
             val storedPages = favoritesRepository.getPages()
-            val deadFavorites = ArrayList<Pair<String, String>>()
             val validPages = ArrayList<List<AppItem>>()
 
             for (page in storedPages) {
                 val pageApps = ArrayList<AppItem>()
                 for (fav in page) {
                     val matchingApp = allApps.firstOrNull { it.packageName == fav.first && it.activityName == fav.second }
-                    if (matchingApp == null) {
-                        deadFavorites.add(fav)
-                        continue
+                    if (matchingApp != null) {
+                        pageApps.add(matchingApp)
                     }
-                    pageApps.add(matchingApp)
                 }
-                if (pageApps.isNotEmpty()) {
-                    validPages.add(pageApps)
-                }
-            }
-
-            for (dead in deadFavorites) {
-                favoritesRepository.removeFavorite(dead.first, dead.second)
+                // Preserving empty pages as configured
+                validPages.add(pageApps)
             }
 
             val finalPages = if (validPages.isEmpty()) listOf(emptyList()) else validPages
@@ -384,6 +445,189 @@ class MainActivity : Activity() {
             val currentPos = layoutManager?.findFirstVisibleItemPosition()?.coerceAtLeast(0) ?: 0
             updatePageDots(currentPos.coerceIn(0, (finalPages.size - 1).coerceAtLeast(0)), finalPages.size)
         }
+        refreshDock()
+    }
+
+    private fun refreshDock() {
+        var dockPairs = favoritesRepository.getDockApps()
+        if (dockPairs.isEmpty() && allApps.isNotEmpty()) {
+            val defaults = resolveDefaultDockApps()
+            favoritesRepository.saveDockApps(defaults)
+            dockPairs = defaults
+        }
+
+        val dockApps = ArrayList<AppItem>()
+        for (pair in dockPairs) {
+            val matching = allApps.firstOrNull { it.packageName == pair.first && it.activityName == pair.second }
+            if (matching != null) {
+                dockApps.add(matching)
+            }
+        }
+        dockAdapter.submitList(dockApps)
+    }
+
+    private fun resolveDefaultDockApps(): List<Pair<String, String>> {
+        val pm = packageManager
+        val candidates = mutableListOf<Pair<String, String>>()
+
+        fun findIntentApp(intent: Intent) {
+            try {
+                val resolveInfo = pm.resolveActivity(intent, 0)
+                if (resolveInfo != null) {
+                    val pkg = resolveInfo.activityInfo.packageName
+                    val act = resolveInfo.activityInfo.name
+                    if (pkg != packageName && candidates.none { it.first == pkg }) {
+                        candidates.add(Pair(pkg, act))
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore resolution failure
+            }
+        }
+
+        // 1. Phone / Dialer
+        findIntentApp(Intent(Intent.ACTION_DIAL))
+        // 2. Messaging
+        findIntentApp(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:")))
+        // 3. Browser
+        findIntentApp(Intent(Intent.ACTION_VIEW, Uri.parse("https://google.com")))
+        // 4. Camera
+        findIntentApp(Intent(MediaStore.ACTION_IMAGE_CAPTURE))
+
+        // Fill remaining from allApps up to 5
+        for (app in allApps) {
+            if (candidates.size >= 5) break
+            if (candidates.none { it.first == app.packageName }) {
+                candidates.add(Pair(app.packageName, app.activityName))
+            }
+        }
+
+        return candidates.take(5)
+    }
+
+    private fun showColorPickerDialog(item: AppItem) {
+        val density = resources.displayMetrics.density
+        val dialogView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (20 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        val tvTitle = TextView(this).apply {
+            text = "انتخاب رنگ برای «${item.label}»"
+            textSize = 15f
+            setTextColor(0xFFFFFFFF.toInt())
+            typeface = androidx.core.content.res.ResourcesCompat.getFont(this@MainActivity, R.font.vazirmatn)
+            setPadding(0, 0, 0, (14 * density).toInt())
+            gravity = Gravity.CENTER
+        }
+        dialogView.addView(tvTitle)
+
+        // Live preview box
+        val previewBox = View(this).apply {
+            val size = (48 * density).toInt()
+            val params = LinearLayout.LayoutParams(size, size).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = (16 * density).toInt()
+            }
+            layoutParams = params
+        }
+        fun updatePreview(color: Int) {
+            val shape = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 14f * density
+                setColor(Color.TRANSPARENT)
+                setStroke((2f * density).toInt(), color)
+            }
+            previewBox.background = shape
+        }
+        val currentColor = favoritesRepository.getIconColor(item.packageName) ?: 0x80FFFFFF.toInt()
+        updatePreview(currentColor)
+        dialogView.addView(previewBox)
+
+        // Presets container
+        val presetsLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, (16 * density).toInt())
+        }
+
+        val presets = listOf(
+            0xFF7F5AF0.toInt(), // One UI Violet
+            0xFF2196F3.toInt(), // Material Blue
+            0xFF00BCD4.toInt(), // Cyan
+            0xFF4CAF50.toInt(), // Emerald Green
+            0xFFFF9800.toInt(), // Orange
+            0xFFE91E63.toInt(), // Red
+            0xFFFFFFFF.toInt()  // Pure White
+        )
+
+        var selectedColor = currentColor
+        val etHex = EditText(this).apply {
+            hint = "#RRGGBB یا #AARRGGBB"
+            setTextColor(0xFFFFFFFF.toInt())
+            setHintTextColor(0x80FFFFFF.toInt())
+            textSize = 14f
+            setText(String.format("#%08X", currentColor))
+            typeface = androidx.core.content.res.ResourcesCompat.getFont(this@MainActivity, R.font.vazirmatn)
+            gravity = Gravity.CENTER
+        }
+
+        for (preset in presets) {
+            val circle = View(this).apply {
+                val cSize = (28 * density).toInt()
+                val cMargin = (4 * density).toInt()
+                val params = LinearLayout.LayoutParams(cSize, cSize).apply {
+                    setMargins(cMargin, 0, cMargin, 0)
+                }
+                layoutParams = params
+                val shape = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(preset)
+                    setStroke((1f * density).toInt(), 0x60FFFFFF.toInt())
+                }
+                background = shape
+                setOnClickListener {
+                    selectedColor = preset
+                    etHex.setText(String.format("#%08X", preset))
+                    updatePreview(preset)
+                }
+            }
+            presetsLayout.addView(circle)
+        }
+        dialogView.addView(presetsLayout)
+
+        etHex.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                try {
+                    val parsed = Color.parseColor(s.toString().trim())
+                    selectedColor = parsed
+                    updatePreview(parsed)
+                } catch (e: Exception) {
+                    // Ignore partial hex typing
+                }
+            }
+        })
+        dialogView.addView(etHex)
+
+        AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setPositiveButton("تأیید") { _, _ ->
+                favoritesRepository.setIconColor(item.packageName, selectedColor)
+                refreshFavoritesOnHome()
+                refreshDock()
+                Toast.makeText(this, "رنگ آیکون تغییر یافت", Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton("پیش‌فرض") { _, _ ->
+                favoritesRepository.setIconColor(item.packageName, null)
+                refreshFavoritesOnHome()
+                refreshDock()
+                Toast.makeText(this, "به رنگ پیش‌فرض بازگشت", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("انصراف", null)
+            .show()
     }
 
     private fun showAppOptionsDialog(item: AppItem) {

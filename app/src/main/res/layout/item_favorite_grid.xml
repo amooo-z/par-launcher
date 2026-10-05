@@ -11,11 +11,32 @@
     android:clickable="true"
     android:focusable="true">
 
-    <View
-        android:id="@+id/view_icon_square"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:background="@drawable/bg_hollow_square" />
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <View
+            android:id="@+id/view_icon_square"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_hollow_square" />
+
+        <TextView
+            android:id="@+id/btn_icon_color_picker"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="-4dp"
+            android:layout_marginEnd="-4dp"
+            android:background="@drawable/bg_color_badge"
+            android:text="🎨"
+            android:textSize="10sp"
+            android:gravity="center"
+            android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true" />
+
+    </FrameLayout>
 
     <TextView
         android:id="@+id/tv_app_label"

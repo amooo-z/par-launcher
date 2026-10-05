@@ -13,6 +13,7 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
     companion object {
         const val PREF_NAME = "parlauncher_prefs"
         private const val KEY_FAVORITES = "pinned_favorites"
+        private const val KEY_DOCK_APPS = "dock_apps"
         private const val KEY_LAYOUT_MODE = "layout_mode"
         private const val ITEM_SEPARATOR = "\n"
         private const val COMPONENT_SEPARATOR = "/"
@@ -25,39 +26,45 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
 
     /**
      * Returns all pages of pinned favorites. Each page is a List<Pair<packageName, activityName>>.
-     * Guaranteed to return at least 1 page.
+     * Guaranteed to return at least 1 page. Empty pages are preserved.
      */
     fun getPages(): List<List<Pair<String, String>>> {
         val raw = prefs.getString(KEY_FAVORITES, null) ?: return listOf(emptyList())
-        if (raw.isBlank()) return listOf(emptyList())
+        if (raw.isEmpty()) return listOf(emptyList())
 
         val rawPages = raw.split(PAGE_SEPARATOR)
         val pages = ArrayList<List<Pair<String, String>>>()
 
         for (rawPage in rawPages) {
-            val pageItems = parseItems(rawPage)
-            if (pageItems.isNotEmpty()) {
-                pages.add(pageItems)
-            }
+            pages.add(parseItems(rawPage))
         }
 
         return if (pages.isEmpty()) listOf(emptyList()) else pages
     }
 
     /**
-     * Saves all pages, automatically pruning empty pages unless it is the only page.
+     * Saves all pages preserving empty pages.
      */
     fun savePages(pages: List<List<Pair<String, String>>>) {
-        val nonEmpty = pages.filter { it.isNotEmpty() }
-        if (nonEmpty.isEmpty()) {
+        if (pages.isEmpty()) {
             prefs.edit().putString(KEY_FAVORITES, "").apply()
             return
         }
 
-        val serialized = nonEmpty.joinToString(PAGE_SEPARATOR) { page ->
+        val serialized = pages.joinToString(PAGE_SEPARATOR) { page ->
             page.joinToString(ITEM_SEPARATOR) { "${it.first}$COMPONENT_SEPARATOR${it.second}" }
         }
         prefs.edit().putString(KEY_FAVORITES, serialized).apply()
+    }
+
+    /**
+     * Creates an empty page at the end and returns its index.
+     */
+    fun addEmptyPage(): Int {
+        val pages = getPages().map { it.toMutableList() }.toMutableList()
+        pages.add(mutableListOf())
+        savePages(pages)
+        return pages.lastIndex
     }
 
     /**
@@ -216,6 +223,46 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
 
     fun isFavorite(packageName: String, activityName: String): Boolean {
         return getFavorites().any { it.first == packageName && it.second == activityName }
+    }
+
+    /**
+     * Returns bottom dock apps (up to 5).
+     */
+    fun getDockApps(): List<Pair<String, String>> {
+        val raw = prefs.getString(KEY_DOCK_APPS, null) ?: return emptyList()
+        if (raw.isBlank()) return emptyList()
+        return parseItems(raw)
+    }
+
+    fun saveDockApps(apps: List<Pair<String, String>>) {
+        val capped = apps.take(5)
+        val serialized = capped.joinToString(ITEM_SEPARATOR) { "${it.first}$COMPONENT_SEPARATOR${it.second}" }
+        prefs.edit().putString(KEY_DOCK_APPS, serialized).apply()
+    }
+
+    fun swapDockApps(fromPos: Int, toPos: Int) {
+        val apps = getDockApps().toMutableList()
+        if (fromPos in 0..apps.lastIndex && toPos in 0..apps.lastIndex) {
+            java.util.Collections.swap(apps, fromPos, toPos)
+            saveDockApps(apps)
+        }
+    }
+
+    /**
+     * Custom icon color (ARGB Int) per package.
+     */
+    fun getIconColor(packageName: String): Int? {
+        val key = "icon_color_$packageName"
+        return if (prefs.contains(key)) prefs.getInt(key, 0) else null
+    }
+
+    fun setIconColor(packageName: String, color: Int?) {
+        val key = "icon_color_$packageName"
+        if (color == null) {
+            prefs.edit().remove(key).apply()
+        } else {
+            prefs.edit().putInt(key, color).apply()
+        }
     }
 
     fun getLayoutMode(): LayoutMode {
