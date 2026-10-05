@@ -317,8 +317,12 @@ class MainActivity : Activity() {
         if (dragData.source == "DOCK") {
             // Reordering within dock
             val target = if (dropPos != -1) dropPos.coerceIn(0, (dockApps.size - 1).coerceAtLeast(0)) else (dockApps.size - 1).coerceAtLeast(0)
-            favoritesRepository.swapDockApps(dragData.sourcePos, target)
-            refreshDock()
+            if (dragData.sourcePos == target || dropPos == -1) {
+                dockAdapter.showColorBadgeFor(dragData.packageName)
+            } else {
+                favoritesRepository.swapDockApps(dragData.sourcePos, target)
+                refreshDock()
+            }
         } else {
             // Dragged from home page into dock
             if (dockApps.size >= 5) {
@@ -346,13 +350,17 @@ class MainActivity : Activity() {
         } else {
             // Moving between pages or within same page
             val pos = if (targetPos != -1) targetPos else 0
-            favoritesRepository.moveFavorite(
-                fromPage = dragData.sourcePageIndex,
-                fromPos = dragData.sourcePos,
-                toPage = targetPage,
-                toPos = pos
-            )
-            refreshFavoritesOnHome()
+            if (dragData.sourcePageIndex == targetPage && (dragData.sourcePos == pos || targetPos == -1)) {
+                homePagerAdapter.showBadgeFor(dragData.packageName)
+            } else {
+                favoritesRepository.moveFavorite(
+                    fromPage = dragData.sourcePageIndex,
+                    fromPos = dragData.sourcePos,
+                    toPage = targetPage,
+                    toPos = pos
+                )
+                refreshFavoritesOnHome()
+            }
         }
     }
 

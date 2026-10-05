@@ -3,11 +3,8 @@ package com.parboard.launcher.ui
 import android.content.ClipData
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
@@ -68,7 +65,6 @@ class FavoritesAdapter(
         private val tvLabel: TextView = itemView.findViewById(R.id.tv_app_label)
 
         fun bind(item: AppItem) {
-            // Guarantee view scale and alpha are always reset cleanly
             itemView.animate().cancel()
             itemView.scaleX = 1.0f
             itemView.scaleY = 1.0f
@@ -110,80 +106,24 @@ class FavoritesAdapter(
                 }
             }
 
-            val touchSlop = ViewConfiguration.get(itemView.context).scaledTouchSlop
-            var downX = 0f
-            var downY = 0f
-            var isLongPressed = false
-            var isDragging = false
+            // Native long-press starts drag immediately
+            itemView.setOnLongClickListener {
+                val pos = bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return@setOnLongClickListener false
 
-            val longPressRunnable = Runnable {
-                isLongPressed = true
-                itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                showColorBadgeFor(item.packageName)
-            }
-
-            itemView.setOnTouchListener { v, event ->
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        downX = event.x
-                        downY = event.y
-                        isLongPressed = false
-                        isDragging = false
-                        v.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout().toLong())
-                        false
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        val dx = event.x - downX
-                        val dy = event.y - downY
-                        val dist = Math.hypot(dx.toDouble(), dy.toDouble())
-                        if (dist > touchSlop) {
-                            if (isLongPressed && !isDragging) {
-                                val pos = bindingAdapterPosition
-                                if (pos == RecyclerView.NO_POSITION) {
-                                    v.removeCallbacks(longPressRunnable)
-                                    return@setOnTouchListener false
-                                }
-                                isDragging = true
-                                hideAllColorBadges()
-                                val clipData = ClipData.newPlainText("app_drag", "${item.packageName}/${item.activityName}")
-                                val shadow = View.DragShadowBuilder(viewIconSquare)
-                                val dragData = DraggedAppData(
-                                    packageName = item.packageName,
-                                    activityName = item.activityName,
-                                    source = if (isDock) "DOCK" else "PAGE",
-                                    sourcePageIndex = pageIndex,
-                                    sourcePos = pos
-                                )
-                                v.startDragAndDrop(clipData, shadow, dragData, 0)
-                                v.alpha = 0.4f
-                                onDragStarted?.invoke(dragData)
-                                true
-                            } else if (!isLongPressed) {
-                                v.removeCallbacks(longPressRunnable)
-                                false
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
-                        }
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        v.removeCallbacks(longPressRunnable)
-                        if (isLongPressed) {
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    MotionEvent.ACTION_CANCEL -> {
-                        v.removeCallbacks(longPressRunnable)
-                        isLongPressed = false
-                        isDragging = false
-                        false
-                    }
-                    else -> false
-                }
+                hideAllColorBadges()
+                val clipData = ClipData.newPlainText("app_drag", "${item.packageName}/${item.activityName}")
+                val shadow = View.DragShadowBuilder(viewIconSquare)
+                val dragData = DraggedAppData(
+                    packageName = item.packageName,
+                    activityName = item.activityName,
+                    source = if (isDock) "DOCK" else "PAGE",
+                    sourcePageIndex = pageIndex,
+                    sourcePos = pos
+                )
+                itemView.startDragAndDrop(clipData, shadow, dragData, 0)
+                onDragStarted?.invoke(dragData)
+                true
             }
         }
     }
