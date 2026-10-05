@@ -10,7 +10,7 @@ import com.parboard.launcher.model.AppItem
 
 class FavoritesAdapter(
     private val onItemClick: (AppItem) -> Unit,
-    private val onItemLongClick: (AppItem) -> Unit
+    private val onItemLongClick: ((AppItem) -> Unit)? = null
 ) : RecyclerView.Adapter<FavoritesAdapter.FavoriteViewHolder>() {
 
     private var items: List<AppItem> = emptyList()
@@ -40,9 +40,13 @@ class FavoritesAdapter(
             itemView.setOnClickListener {
                 onItemClick(item)
             }
-            itemView.setOnLongClickListener {
-                onItemLongClick(item)
-                true
+            if (onItemLongClick != null) {
+                itemView.setOnLongClickListener {
+                    onItemLongClick.invoke(item)
+                    true
+                }
+            } else {
+                itemView.setOnLongClickListener(null)
             }
         }
     }

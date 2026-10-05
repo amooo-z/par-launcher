@@ -12,7 +12,6 @@ import java.util.Collections
 
 class HomePagerAdapter(
     private val onAppClick: (AppItem) -> Unit,
-    private val onAppLongClick: (AppItem, pageIndex: Int, totalPages: Int) -> Unit,
     private val onItemMovedWithinPage: (pageIndex: Int, fromPos: Int, toPos: Int) -> Unit
 ) : RecyclerView.Adapter<HomePagerAdapter.PageViewHolder>() {
 
@@ -43,12 +42,7 @@ class HomePagerAdapter(
             rvGrid.setHasFixedSize(true)
             gridAdapter = FavoritesAdapter(
                 onItemClick = { item -> onAppClick(item) },
-                onItemLongClick = { item ->
-                    val pos = bindingAdapterPosition
-                    if (pos != RecyclerView.NO_POSITION) {
-                        onAppLongClick(item, pos, pages.size)
-                    }
-                }
+                onItemLongClick = null // No dialog popup - pure drag & drop!
             )
             rvGrid.adapter = gridAdapter
 
@@ -73,6 +67,28 @@ class HomePagerAdapter(
                         return true
                     }
                     return false
+                }
+
+                override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+                    super.onSelectedChanged(viewHolder, actionState)
+                    if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                        viewHolder?.itemView?.animate()
+                            ?.scaleX(1.15f)
+                            ?.scaleY(1.15f)
+                            ?.alpha(0.85f)
+                            ?.setDuration(150)
+                            ?.start()
+                    }
+                }
+
+                override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                    super.clearView(recyclerView, viewHolder)
+                    viewHolder.itemView.animate()
+                        ?.scaleX(1.0f)
+                        ?.scaleY(1.0f)
+                        ?.alpha(1.0f)
+                        ?.setDuration(150)
+                        ?.start()
                 }
 
                 override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}

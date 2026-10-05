@@ -136,9 +136,6 @@ class MainActivity : Activity() {
             onAppClick = { item ->
                 AppLauncher.launch(this, item)
             },
-            onAppLongClick = { item, pageIndex, totalPages ->
-                showPageAppOptionsDialog(item, pageIndex, totalPages)
-            },
             onItemMovedWithinPage = { pageIndex, fromPos, toPos ->
                 favoritesRepository.swapFavorites(pageIndex, fromPos, toPos)
             }
@@ -188,61 +185,6 @@ class MainActivity : Activity() {
             }
             layoutPageDots.addView(dot)
         }
-    }
-
-    private fun showPageAppOptionsDialog(item: AppItem, pageIndex: Int, totalPages: Int) {
-        val options = mutableListOf<CharSequence>()
-
-        options.add("اطلاعات برنامه (تنظیمات سیستم)")
-
-        if (favoritesRepository.getLayoutMode() == LayoutMode.DRAWER) {
-            options.add("حذف از برگزیده‌ها")
-        }
-
-        if (pageIndex > 0) {
-            options.add("انتقال به صفحه قبلی (صفحه ${pageIndex})")
-        }
-
-        if (pageIndex < totalPages - 1) {
-            options.add("انتقال به صفحه بعدی (صفحه ${pageIndex + 2})")
-        }
-
-        options.add("ایجاد صفحه جدید و انتقال به آن")
-
-        AlertDialog.Builder(this)
-            .setTitle(item.label)
-            .setItems(options.toTypedArray()) { _, which ->
-                val selectedOption = options[which].toString()
-                when {
-                    selectedOption.startsWith("اطلاعات برنامه") -> {
-                        AppLauncher.openAppDetails(this, item.packageName)
-                    }
-                    selectedOption.startsWith("حذف") -> {
-                        favoritesRepository.removeFavorite(item.packageName, item.activityName)
-                        Toast.makeText(this, "از برگزیده‌ها حذف شد", Toast.LENGTH_SHORT).show()
-                        refreshFavoritesOnHome()
-                    }
-                    selectedOption.startsWith("انتقال به صفحه قبلی") -> {
-                        favoritesRepository.moveFavoriteToPrevPage(item.packageName, item.activityName)
-                        Toast.makeText(this, "به صفحه قبلی منتقل شد", Toast.LENGTH_SHORT).show()
-                        refreshFavoritesOnHome()
-                        rvHomePager.post { rvHomePager.smoothScrollToPosition((pageIndex - 1).coerceAtLeast(0)) }
-                    }
-                    selectedOption.startsWith("انتقال به صفحه بعدی") -> {
-                        favoritesRepository.moveFavoriteToNextPage(item.packageName, item.activityName)
-                        Toast.makeText(this, "به صفحه بعدی منتقل شد", Toast.LENGTH_SHORT).show()
-                        refreshFavoritesOnHome()
-                        rvHomePager.post { rvHomePager.smoothScrollToPosition(pageIndex + 1) }
-                    }
-                    selectedOption.startsWith("ایجاد صفحه جدید") -> {
-                        favoritesRepository.moveFavoriteToNewPage(item.packageName, item.activityName)
-                        Toast.makeText(this, "صفحه جدید ایجاد شد", Toast.LENGTH_SHORT).show()
-                        refreshFavoritesOnHome()
-                        rvHomePager.post { rvHomePager.smoothScrollToPosition(totalPages) }
-                    }
-                }
-            }
-            .show()
     }
 
     private fun setupDrawerRecyclerView() {
