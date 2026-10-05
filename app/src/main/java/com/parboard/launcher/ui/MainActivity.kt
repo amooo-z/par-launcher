@@ -176,6 +176,8 @@ class MainActivity : Activity() {
         rvHomePager.layoutManager = layoutManager
         rvHomePager.adapter = homePagerAdapter
 
+        rvHomePager.itemAnimator = null
+
         pagerSnapHelper = PagerSnapHelper()
         pagerSnapHelper.attachToRecyclerView(rvHomePager)
 
@@ -226,13 +228,6 @@ class MainActivity : Activity() {
                     }
                     true
                 }
-                DragEvent.ACTION_DRAG_ENDED -> {
-                    rvHomePager.post {
-                        refreshFavoritesOnHome()
-                        refreshDock()
-                    }
-                    true
-                }
                 else -> true
             }
         }
@@ -258,7 +253,7 @@ class MainActivity : Activity() {
         rvDock.layoutManager = object : GridLayoutManager(this, 5) {
             override fun canScrollVertically(): Boolean = false
         }
-        rvDock.overScrollMode = View.OVER_SCROLL_NEVER
+        rvDock.itemAnimator = null
         rvDock.adapter = dockAdapter
 
         // Listen for drops into bottom dock
@@ -270,12 +265,6 @@ class MainActivity : Activity() {
                     val dropPos = if (child != null) rvDock.getChildAdapterPosition(child).coerceAtLeast(0) else -1
                     rvDock.post {
                         handleDropOnDock(dragData, dropPos)
-                    }
-                    true
-                }
-                DragEvent.ACTION_DRAG_ENDED -> {
-                    rvDock.post {
-                        refreshDock()
                     }
                     true
                 }
@@ -303,13 +292,6 @@ class MainActivity : Activity() {
                     val dragData = event.localState as? DraggedAppData ?: return@setOnDragListener false
                     homeContainer.post {
                         handleDropOutsideDock(dragData)
-                    }
-                    true
-                }
-                DragEvent.ACTION_DRAG_ENDED -> {
-                    homeContainer.post {
-                        refreshFavoritesOnHome()
-                        refreshDock()
                     }
                     true
                 }

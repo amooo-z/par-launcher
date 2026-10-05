@@ -57,7 +57,7 @@ class HomePagerAdapter(
                 override fun canScrollVertically(): Boolean = false
             }
             rvGrid.isNestedScrollingEnabled = false
-            rvGrid.overScrollMode = View.OVER_SCROLL_NEVER
+            rvGrid.itemAnimator = null
             gridAdapter = FavoritesAdapter(
                 onItemClick = { item -> onAppClick(item) },
                 pageIndex = 0,
@@ -92,12 +92,6 @@ class HomePagerAdapter(
                         } else {
                             false
                         }
-                    }
-                    DragEvent.ACTION_DRAG_ENDED -> {
-                        rvGrid.post {
-                            gridAdapter.notifyDataSetChanged()
-                        }
-                        true
                     }
                     else -> true
                 }
