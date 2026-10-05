@@ -1,8 +1,13 @@
 package com.parboard.launcher.util
 
+import android.icu.text.DateFormat
+import android.icu.text.DisplayContext
+import android.icu.util.ULocale
 import java.util.Calendar
 
 object DateFormatter {
+
+    private val persianLocale = ULocale("fa_IR@calendar=persian")
 
     private val PERSIAN_MONTHS = arrayOf(
         "فروردین", "اردیبهشت", "خرداد",
@@ -18,9 +23,51 @@ object DateFormatter {
     private val PERSIAN_DIGITS = charArrayOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
 
     /**
-     * Converts Gregorian year, month (1-12), and day (1-31) to Jalali (Solar Hijri) Triple(year, month, day).
-     * Zero-allocation standard astronomical conversion.
+     * Formats current date into Persian Solar Hijri string using native Android ICU (minSdk 24+).
+     * Uses android.icu.util.Calendar with persian calendar locale.
+     * e.g., "دوشنبه، ۱۳ مهر ۱۴۰۵"
      */
+    fun formatPersianDate(cal: Calendar = Calendar.getInstance()): String {
+        return try {
+            val icuCalendar = android.icu.util.Calendar.getInstance(persianLocale).apply {
+                timeInMillis = cal.timeInMillis
+            }
+            val df = DateFormat.getDateInstance(DateFormat.FULL, persianLocale).apply {
+                calendar = icuCalendar
+                setContext(DisplayContext.CAPITALIZATION_FOR_STANDALONE)
+            }
+            val formatted = df.format(icuCalendar)
+            if (formatted.isNullOrBlank()) {
+                fallbackFormat(cal)
+            } else {
+                formatted
+            }
+        } catch (t: Throwable) {
+            // Fallback for JVM host unit tests where android.icu classes are mock stubs
+            fallbackFormat(cal)
+        }
+    }
+
+    /**
+     * Algorithmic Solar Hijri fallback for JVM test environments.
+     */
+    fun fallbackFormat(cal: Calendar): String {
+        val gYear = cal.get(Calendar.YEAR)
+        val gMonth = cal.get(Calendar.MONTH) + 1
+        val gDay = cal.get(Calendar.DAY_OF_MONTH)
+
+        val (jYear, jMonth, jDay) = toJalali(gYear, gMonth, gDay)
+
+        val dayOfWeekIndex = cal.get(Calendar.DAY_OF_WEEK) - 1
+        val weekDayName = PERSIAN_WEEKDAYS[dayOfWeekIndex]
+        val monthName = PERSIAN_MONTHS[jMonth - 1]
+
+        val dayStr = toPersianDigits(jDay)
+        val yearStr = toPersianDigits(jYear)
+
+        return "$weekDayName، $dayStr $monthName $yearStr"
+    }
+
     fun toJalali(gYear: Int, gMonth: Int, gDay: Int): Triple<Int, Int, Int> {
         val gDaysInMonth = intArrayOf(0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 
@@ -83,38 +130,10 @@ object DateFormatter {
         return sb.toString()
     }
 
-    /**
-     * Formats the given Calendar into a Persian date string like:
-     * "دوشنبه، ۱۳ مهر ۱۴۰۵"
-     */
-    fun formatPersianDate(cal: Calendar): String {
-        val gYear = cal.get(Calendar.YEAR)
-        val gMonth = cal.get(Calendar.MONTH) + 1
-        val gDay = cal.get(Calendar.DAY_OF_MONTH)
-
-        val (jYear, jMonth, jDay) = toJalali(gYear, gMonth, gDay)
-
-        // Calendar.DAY_OF_WEEK: Sunday=1, Monday=2, ..., Saturday=7
-        val dayOfWeekIndex = cal.get(Calendar.DAY_OF_WEEK) - 1
-        val weekDayName = PERSIAN_WEEKDAYS[dayOfWeekIndex]
-        val monthName = PERSIAN_MONTHS[jMonth - 1]
-
-        val dayStr = toPersianDigits(jDay)
-        val yearStr = toPersianDigits(jYear)
-
-        return "$weekDayName، $dayStr $monthName $yearStr"
-    }
-
-    /**
-     * Convenience function to get the current formatted Persian date.
-     */
     fun getCurrentPersianDate(): String {
         return formatPersianDate(Calendar.getInstance())
     }
 
-    /**
-     * Formats current time into HH:mm.
-     */
     fun formatTime(cal: Calendar = Calendar.getInstance()): String {
         val hour = cal.get(Calendar.HOUR_OF_DAY)
         val minute = cal.get(Calendar.MINUTE)

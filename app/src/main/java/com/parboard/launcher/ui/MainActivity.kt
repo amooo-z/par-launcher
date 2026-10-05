@@ -204,9 +204,14 @@ class MainActivity : Activity() {
         val favorites = favoritesRepository.getFavorites()
         val inflater = LayoutInflater.from(this)
 
+        val deadFavorites = ArrayList<Pair<String, String>>()
+
         for (fav in favorites) {
             val matchingApp = allApps.firstOrNull { it.packageName == fav.first && it.activityName == fav.second }
-                ?: continue
+            if (matchingApp == null) {
+                deadFavorites.add(fav)
+                continue
+            }
 
             val view = inflater.inflate(R.layout.item_app, favoritesListLayout, false) as TextView
             view.text = matchingApp.label
@@ -221,6 +226,10 @@ class MainActivity : Activity() {
                 true
             }
             favoritesListLayout.addView(view)
+        }
+
+        for (dead in deadFavorites) {
+            favoritesRepository.removeFavorite(dead.first, dead.second)
         }
     }
 
