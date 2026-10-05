@@ -248,6 +248,9 @@ class MainActivity : Activity() {
             },
             onDragStarted = {
                 homePagerAdapter.hideAllBadges()
+            },
+            onItemDropped = { dragData, dropPos ->
+                handleDropOnDock(dragData, dropPos)
             }
         )
 

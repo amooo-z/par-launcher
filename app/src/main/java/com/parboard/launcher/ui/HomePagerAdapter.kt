@@ -64,7 +64,13 @@ class HomePagerAdapter(
                 isDock = false,
                 colorProvider = colorProvider,
                 onColorPickerClick = onColorPickerClick,
-                onDragStarted = { hideAllBadges() }
+                onDragStarted = { hideAllBadges() },
+                onItemDropped = { dragData, dropPos ->
+                    val pagePos = bindingAdapterPosition
+                    if (pagePos != RecyclerView.NO_POSITION && pagePos in pages.indices) {
+                        onItemDroppedOnPage(dragData, pagePos, dropPos)
+                    }
+                }
             )
             rvGrid.adapter = gridAdapter
             activeAdapters.add(gridAdapter)

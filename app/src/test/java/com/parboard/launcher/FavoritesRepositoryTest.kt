@@ -97,6 +97,23 @@ class FavoritesRepositoryTest {
         repository.setIconColor("com.test.app", null)
         assertEquals(null, repository.getIconColor("com.test.app"))
     }
+
+    @Test
+    fun testAddFavoriteWithCascadingOverflow() {
+        repository.setLayoutMode(LayoutMode.ALL_APPS)
+        val fullPage0 = (1..20).map { Pair("com.app$it", ".Act$it") }
+        repository.savePages(listOf(fullPage0))
+
+        // Add a 21st item at position 0 of page 0
+        repository.addFavoriteAt(0, 0, Pair("com.newapp", ".NewAct"))
+
+        val pages = repository.getPages()
+        assertEquals(2, pages.size)
+        assertEquals(20, pages[0].size)
+        assertEquals("com.newapp", pages[0][0].first)
+        assertEquals(1, pages[1].size)
+        assertEquals("com.app20", pages[1][0].first)
+    }
 }
 
 class FakeSharedPreferences : SharedPreferences {

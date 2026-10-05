@@ -3,8 +3,12 @@ package com.parboard.launcher.ui
 import android.content.ClipData
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.view.DragEvent
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
@@ -18,7 +22,8 @@ class FavoritesAdapter(
     var isDock: Boolean = false,
     private val colorProvider: ((packageName: String) -> Int?)? = null,
     private val onColorPickerClick: ((AppItem) -> Unit)? = null,
-    private val onDragStarted: ((DraggedAppData) -> Unit)? = null
+    private val onDragStarted: ((DraggedAppData) -> Unit)? = null,
+    private val onItemDropped: ((dragData: DraggedAppData, dropPos: Int) -> Unit)? = null
 ) : RecyclerView.Adapter<FavoritesAdapter.FavoriteViewHolder>() {
 
     private var items: List<AppItem> = emptyList()
@@ -107,28 +112,92 @@ class FavoritesAdapter(
                 }
             }
 
-            // Native cross-view Drag & Drop
-            itemView.setOnLongClickListener {
-                hideAllColorBadges()
-                val clipData = ClipData.newPlainText("app_drag", "${item.packageName}/${item.activityName}")
-                val shadow = View.DragShadowBuilder(viewIconSquare)
-                val dragData = DraggedAppData(
-                    packageName = item.packageName,
-                    activityName = item.activityName,
-                    source = if (isDock) "DOCK" else "PAGE",
-                    sourcePageIndex = pageIndex,
-                    sourcePos = bindingAdapterPosition
-                )
-                itemView.startDragAndDrop(clipData, shadow, dragData, 0)
-                itemView.alpha = 0.35f
-                onDragStarted?.invoke(dragData)
-                true
+            val touchSlop = ViewConfiguration.get(itemView.context).scaledTouchSlop
+            var downX = 0f
+            var downY = 0f
+            var isLongPressed = false
+            var isDragging = false
+
+            val longPressRunnable = Runnable {
+                isLongPressed = true
+                itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                showColorBadgeFor(item.packageName)
             }
 
+            itemView.setOnTouchListener { v, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = event.x
+                        downY = event.y
+                        isLongPressed = false
+                        isDragging = false
+                        v.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout().toLong())
+                        false
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = event.x - downX
+                        val dy = event.y - downY
+                        val dist = Math.hypot(dx.toDouble(), dy.toDouble())
+                        if (dist > touchSlop) {
+                            if (isLongPressed && !isDragging) {
+                                isDragging = true
+                                hideAllColorBadges()
+                                val clipData = ClipData.newPlainText("app_drag", "${item.packageName}/${item.activityName}")
+                                val shadow = View.DragShadowBuilder(viewIconSquare)
+                                val dragData = DraggedAppData(
+                                    packageName = item.packageName,
+                                    activityName = item.activityName,
+                                    source = if (isDock) "DOCK" else "PAGE",
+                                    sourcePageIndex = pageIndex,
+                                    sourcePos = bindingAdapterPosition
+                                )
+                                v.startDragAndDrop(clipData, shadow, dragData, 0)
+                                v.alpha = 0.35f
+                                onDragStarted?.invoke(dragData)
+                                true
+                            } else if (!isLongPressed) {
+                                v.removeCallbacks(longPressRunnable)
+                                false
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        v.removeCallbacks(longPressRunnable)
+                        if (isLongPressed) {
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        v.removeCallbacks(longPressRunnable)
+                        isLongPressed = false
+                        isDragging = false
+                        false
+                    }
+                    else -> false
+                }
+            }
+
+            // Drop listener on individual item: captures drops directly onto icons
             itemView.setOnDragListener { v, event ->
                 when (event.action) {
-                    android.view.DragEvent.ACTION_DRAG_STARTED -> true
-                    android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                    DragEvent.ACTION_DRAG_STARTED -> true
+                    DragEvent.ACTION_DROP -> {
+                        val dragData = event.localState as? DraggedAppData
+                        if (dragData != null) {
+                            val pos = bindingAdapterPosition
+                            if (pos != RecyclerView.NO_POSITION) {
+                                onItemDropped?.invoke(dragData, pos)
+                                true
+                            } else false
+                        } else false
+                    }
+                    DragEvent.ACTION_DRAG_ENDED -> {
                         v.animate().cancel()
                         v.scaleX = 1.0f
                         v.scaleY = 1.0f

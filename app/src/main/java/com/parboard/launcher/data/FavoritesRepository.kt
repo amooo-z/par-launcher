@@ -158,6 +158,19 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
         val page = pages[pageIndex]
         val clampedPos = pos.coerceIn(0, page.size)
         page.add(clampedPos, item)
+
+        val maxPerPage = if (getLayoutMode() == LayoutMode.ALL_APPS) 20 else 25
+        var curIdx = pageIndex
+        while (curIdx < pages.size && pages[curIdx].size > maxPerPage) {
+            val overflow = pages[curIdx].removeAt(pages[curIdx].lastIndex)
+            val nextIdx = curIdx + 1
+            if (nextIdx >= pages.size) {
+                pages.add(mutableListOf())
+            }
+            pages[nextIdx].add(0, overflow)
+            curIdx++
+        }
+
         savePages(pages)
     }
 
