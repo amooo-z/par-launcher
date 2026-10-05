@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/scrim_dark"
+    android:fitsSystemWindows="true">
+
+    <!-- Layer 1: Home View -->
+    <LinearLayout
+        android:id="@+id/home_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="32dp"
+        android:paddingBottom="24dp">
+
+        <!-- Default Launcher Banner (shown only if not default) -->
+        <TextView
+            android:id="@+id/tv_default_prompt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#20FFFFFF"
+            android:padding="12dp"
+            android:layout_marginBottom="16dp"
+            android:text="@string/default_launcher_prompt"
+            android:textColor="@color/accent"
+            android:textSize="13sp"
+            android:fontFamily="@font/vazirmatn"
+            android:gravity="center"
+            android:visibility="gone" />
+
+        <!-- Clock & Solar Hijri Date -->
+        <LinearLayout
+            android:id="@+id/clock_date_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="32dp">
+
+            <TextClock
+                android:id="@+id/tc_clock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="HH:mm"
+                android:format24Hour="HH:mm"
+                android:textColor="@color/text_primary"
+                android:textSize="58sp"
+                android:fontFamily="@font/vazirmatn"
+                android:textStyle="bold"
+                android:includeFontPadding="false" />
+
+            <TextView
+                android:id="@+id/tv_persian_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="17sp"
+                android:fontFamily="@font/vazirmatn" />
+
+        </LinearLayout>
+
+        <!-- Pinned Favorites Container -->
+        <TextView
+            android:id="@+id/tv_favorites_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="برنامه‌های برگزیده"
+            android:textColor="@color/text_hint"
+            android:textSize="13sp"
+            android:fontFamily="@font/vazirmatn"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:id="@+id/favorites_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical" />
+
+        <!-- Search Trigger / Swipe-up indicator -->
+        <LinearLayout
+            android:id="@+id/btn_open_drawer"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:background="#15FFFFFF"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/search_hint"
+                android:textColor="@color/text_hint"
+                android:textSize="15sp"
+                android:fontFamily="@font/vazirmatn" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="▲"
+                android:textColor="@color/text_hint"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Layer 2: Drawer View (Overlaid) -->
+    <include
+        android:id="@+id/included_drawer"
+        layout="@layout/view_drawer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+</FrameLayout>
