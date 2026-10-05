@@ -42,7 +42,8 @@ class MainActivity : Activity() {
     private lateinit var drawerRoot: View
     private lateinit var tvPersianDate: TextView
     private lateinit var tvDefaultPrompt: TextView
-    private lateinit var favoritesListLayout: LinearLayout
+    private lateinit var rvFavorites: RecyclerView
+    private lateinit var favoritesAdapter: FavoritesAdapter
     private lateinit var etSearch: EditText
     private lateinit var tvClearSearch: TextView
     private lateinit var rvApps: RecyclerView
@@ -82,11 +83,13 @@ class MainActivity : Activity() {
         drawerRoot = findViewById(R.id.included_drawer)
         tvPersianDate = findViewById(R.id.tv_persian_date)
         tvDefaultPrompt = findViewById(R.id.tv_default_prompt)
-        favoritesListLayout = findViewById(R.id.favorites_list)
+        rvFavorites = findViewById(R.id.rv_favorites)
 
         etSearch = findViewById(R.id.et_search)
         tvClearSearch = findViewById(R.id.tv_clear_search)
         rvApps = findViewById(R.id.rv_apps)
+
+        setupFavoritesRecyclerView()
 
         findViewById<View>(R.id.btn_open_drawer).setOnClickListener {
             openDrawer()
@@ -99,6 +102,20 @@ class MainActivity : Activity() {
                 // Ignore fallback failure
             }
         }
+    }
+
+    private fun setupFavoritesRecyclerView() {
+        favoritesAdapter = FavoritesAdapter(
+            onItemClick = { item ->
+                AppLauncher.launch(this, item)
+            },
+            onItemLongClick = { item ->
+                showUnpinDialog(item)
+            }
+        )
+        rvFavorites.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 5)
+        rvFavorites.setHasFixedSize(true)
+        rvFavorites.adapter = favoritesAdapter
     }
 
     private fun setupDrawerRecyclerView() {
@@ -200,11 +217,9 @@ class MainActivity : Activity() {
     }
 
     private fun refreshFavoritesOnHome() {
-        favoritesListLayout.removeAllViews()
         val favorites = favoritesRepository.getFavorites()
-        val inflater = LayoutInflater.from(this)
-
         val deadFavorites = ArrayList<Pair<String, String>>()
+        val favoriteApps = ArrayList<AppItem>()
 
         for (fav in favorites) {
             val matchingApp = allApps.firstOrNull { it.packageName == fav.first && it.activityName == fav.second }
@@ -212,25 +227,14 @@ class MainActivity : Activity() {
                 deadFavorites.add(fav)
                 continue
             }
-
-            val view = inflater.inflate(R.layout.item_app, favoritesListLayout, false) as TextView
-            view.text = matchingApp.label
-            view.textSize = 19f
-            view.setPadding(0, 16, 0, 16)
-
-            view.setOnClickListener {
-                AppLauncher.launch(this, matchingApp)
-            }
-            view.setOnLongClickListener {
-                showUnpinDialog(matchingApp)
-                true
-            }
-            favoritesListLayout.addView(view)
+            favoriteApps.add(matchingApp)
         }
 
         for (dead in deadFavorites) {
             favoritesRepository.removeFavorite(dead.first, dead.second)
         }
+
+        favoritesAdapter.submitList(favoriteApps)
     }
 
     private fun showAppOptionsDialog(item: AppItem) {

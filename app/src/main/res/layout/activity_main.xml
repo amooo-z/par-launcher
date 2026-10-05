@@ -75,12 +75,14 @@
             android:fontFamily="@font/vazirmatn"
             android:layout_marginBottom="8dp" />
 
-        <LinearLayout
-            android:id="@+id/favorites_list"
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_favorites"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:orientation="vertical" />
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:nestedScrollingEnabled="false" />
 
         <!-- Search Trigger / Swipe-up indicator -->
         <LinearLayout
