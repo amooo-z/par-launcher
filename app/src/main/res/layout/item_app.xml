@@ -1,17 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<TextView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/tv_app_label"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
     android:minHeight="48dp"
-    android:gravity="center_vertical|start"
     android:paddingStart="24dp"
     android:paddingEnd="24dp"
-    android:paddingTop="12dp"
-    android:paddingBottom="12dp"
-    android:textColor="@color/text_primary"
-    android:textSize="17sp"
-    android:fontFamily="@font/vazirmatn"
-    android:background="?android:attr/selectableItemBackground"
-    android:maxLines="1"
-    android:ellipsize="end" />
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp"
+    android:background="?android:attr/selectableItemBackground">
+
+    <TextView
+        android:id="@+id/tv_app_label"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/text_primary"
+        android:textSize="17sp"
+        android:fontFamily="@font/vazirmatn"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/tv_check_indicator"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:gravity="center"
+        android:textColor="@color/accent"
+        android:textSize="16sp"
+        android:text="✓"
+        android:visibility="gone" />
+
+</LinearLayout>

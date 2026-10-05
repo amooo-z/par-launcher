@@ -2,6 +2,7 @@ package com.parboard.launcher
 
 import android.content.SharedPreferences
 import com.parboard.launcher.data.FavoritesRepository
+import com.parboard.launcher.data.FavoritesRepository.LayoutMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -55,17 +56,41 @@ class FavoritesRepositoryTest {
     }
 
     @Test
-    fun testCapAtSevenFavorites() {
-        for (i in 1..7) {
+    fun testUnlimitedFavorites() {
+        // Can add more than 7 favorites (unlimited)
+        for (i in 1..25) {
             val added = repository.addFavorite("com.app$i", ".Main")
             assertTrue("App $i should be added", added)
         }
-        assertEquals(7, repository.getFavorites().size)
+        assertEquals(25, repository.getFavorites().size)
+    }
 
-        // 8th favorite should fail
-        val eighthAdded = repository.addFavorite("com.app8", ".Main")
-        assertFalse("8th item should be rejected", eighthAdded)
-        assertEquals(7, repository.getFavorites().size)
+    @Test
+    fun testBatchAddFavorites() {
+        val batch = listOf(
+            Pair("com.app1", ".Main"),
+            Pair("com.app2", ".Main"),
+            Pair("com.app3", ".Main")
+        )
+        val addedCount = repository.addFavorites(batch)
+        assertEquals(3, addedCount)
+        assertEquals(3, repository.getFavorites().size)
+
+        // Adding again with duplicates
+        val duplicateBatch = listOf(
+            Pair("com.app3", ".Main"),
+            Pair("com.app4", ".Main")
+        )
+        val secondAdded = repository.addFavorites(duplicateBatch)
+        assertEquals(1, secondAdded) // only app4 was added
+        assertEquals(4, repository.getFavorites().size)
+    }
+
+    @Test
+    fun testLayoutModePersistence() {
+        assertEquals(LayoutMode.DRAWER, repository.getLayoutMode())
+        repository.setLayoutMode(LayoutMode.ALL_APPS)
+        assertEquals(LayoutMode.ALL_APPS, repository.getLayoutMode())
     }
 }
 

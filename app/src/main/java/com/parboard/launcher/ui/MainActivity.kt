@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -27,6 +26,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.parboard.launcher.R
 import com.parboard.launcher.data.AppRepository
 import com.parboard.launcher.data.FavoritesRepository
+import com.parboard.launcher.data.FavoritesRepository.LayoutMode
 import com.parboard.launcher.model.AppItem
 import com.parboard.launcher.util.AppLauncher
 import com.parboard.launcher.util.DateFormatter
@@ -42,10 +42,20 @@ class MainActivity : Activity() {
     private lateinit var drawerRoot: View
     private lateinit var tvPersianDate: TextView
     private lateinit var tvDefaultPrompt: TextView
+    private lateinit var tvFavoritesTitle: TextView
+    private lateinit var btnOpenDrawer: View
     private lateinit var rvFavorites: RecyclerView
     private lateinit var favoritesAdapter: FavoritesAdapter
+
+    // Drawer search & selection
+    private lateinit var layoutSearchBar: LinearLayout
+    private lateinit var layoutSelectionBar: LinearLayout
     private lateinit var etSearch: EditText
     private lateinit var tvClearSearch: TextView
+    private lateinit var btnCancelSelection: TextView
+    private lateinit var tvSelectionCount: TextView
+    private lateinit var btnSelectAll: TextView
+    private lateinit var btnAddSelectedToHome: TextView
     private lateinit var rvApps: RecyclerView
     private lateinit var appAdapter: AppAdapter
 
@@ -62,7 +72,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Make window edge-to-edge
+        // Edge-to-edge window
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setContentView(R.layout.activity_main)
@@ -71,8 +81,10 @@ class MainActivity : Activity() {
         favoritesRepository = FavoritesRepository.create(this)
 
         initViews()
+        setupFavoritesRecyclerView()
         setupDrawerRecyclerView()
         setupSearch()
+        setupSelectionBar()
         setupBackHandling()
 
         loadApps()
@@ -83,16 +95,33 @@ class MainActivity : Activity() {
         drawerRoot = findViewById(R.id.included_drawer)
         tvPersianDate = findViewById(R.id.tv_persian_date)
         tvDefaultPrompt = findViewById(R.id.tv_default_prompt)
+        tvFavoritesTitle = findViewById(R.id.tv_favorites_title)
+        btnOpenDrawer = findViewById(R.id.btn_open_drawer)
         rvFavorites = findViewById(R.id.rv_favorites)
 
+        // Drawer components
+        layoutSearchBar = findViewById(R.id.layout_search_bar)
+        layoutSelectionBar = findViewById(R.id.layout_selection_bar)
         etSearch = findViewById(R.id.et_search)
         tvClearSearch = findViewById(R.id.tv_clear_search)
+        btnCancelSelection = findViewById(R.id.btn_cancel_selection)
+        tvSelectionCount = findViewById(R.id.tv_selection_count)
+        btnSelectAll = findViewById(R.id.btn_select_all)
+        btnAddSelectedToHome = findViewById(R.id.btn_add_selected_to_home)
         rvApps = findViewById(R.id.rv_apps)
 
-        setupFavoritesRecyclerView()
-
-        findViewById<View>(R.id.btn_open_drawer).setOnClickListener {
+        btnOpenDrawer.setOnClickListener {
             openDrawer()
+        }
+
+        // Long-click on home container or clock opens Settings Dialog to switch modes
+        homeContainer.setOnLongClickListener {
+            showSettingsDialog()
+            true
+        }
+        findViewById<View>(R.id.clock_date_container).setOnLongClickListener {
+            showSettingsDialog()
+            true
         }
 
         tvDefaultPrompt.setOnClickListener {
@@ -110,7 +139,11 @@ class MainActivity : Activity() {
                 AppLauncher.launch(this, item)
             },
             onItemLongClick = { item ->
-                showUnpinDialog(item)
+                if (favoritesRepository.getLayoutMode() == LayoutMode.DRAWER) {
+                    showUnpinDialog(item)
+                } else {
+                    showSettingsDialog()
+                }
             }
         )
         rvFavorites.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 5)
@@ -125,6 +158,9 @@ class MainActivity : Activity() {
             },
             onAppLongClick = { item ->
                 showAppOptionsDialog(item)
+            },
+            onSelectionChanged = { count ->
+                tvSelectionCount.text = "$count انتخاب‌شده"
             }
         )
         rvApps.layoutManager = LinearLayoutManager(this)
@@ -150,32 +186,82 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun setupSelectionBar() {
+        btnCancelSelection.setOnClickListener {
+            exitSelectionMode()
+        }
+
+        btnSelectAll.setOnClickListener {
+            appAdapter.selectAll()
+        }
+
+        btnAddSelectedToHome.setOnClickListener {
+            val selected = appAdapter.selectedItems.toList()
+            if (selected.isNotEmpty()) {
+                val pairs = selected.map { Pair(it.packageName, it.activityName) }
+                val addedCount = favoritesRepository.addFavorites(pairs)
+                Toast.makeText(this, "$addedCount برنامه به صفحه اصلی اضافه شد", Toast.LENGTH_SHORT).show()
+                exitSelectionMode()
+                closeDrawer()
+                refreshFavoritesOnHome()
+            } else {
+                Toast.makeText(this, "برنامه‌ای انتخاب نشده است", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun enterSelectionMode(initialItem: AppItem? = null) {
+        layoutSearchBar.visibility = View.GONE
+        layoutSelectionBar.visibility = View.VISIBLE
+
+        // Dismiss keyboard when entering multi-select
+        val imm = getSystemService(InputMethodManager::class.java)
+        imm?.hideSoftInputFromWindow(etSearch.windowToken, 0)
+
+        appAdapter.startSelectionMode(initialItem)
+    }
+
+    private fun exitSelectionMode() {
+        appAdapter.endSelectionMode()
+        layoutSelectionBar.visibility = View.GONE
+        layoutSearchBar.visibility = View.VISIBLE
+    }
+
     private fun setupBackHandling() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             backCallback = OnBackInvokedCallback {
-                if (drawerRoot.visibility == View.VISIBLE) {
-                    closeDrawer()
-                }
+                handleBackPressedLogic()
             }
         }
     }
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        if (drawerRoot.visibility == View.VISIBLE) {
-            closeDrawer()
-        } else {
-            // Launcher is root of task stack; stay on home
+        if (!handleBackPressedLogic()) {
+            // Launcher root
         }
     }
 
+    private fun handleBackPressedLogic(): Boolean {
+        if (drawerRoot.visibility == View.VISIBLE) {
+            if (appAdapter.isSelectionMode) {
+                exitSelectionMode()
+                return true
+            }
+            closeDrawer()
+            return true
+        }
+        return false
+    }
+
     private fun openDrawer() {
+        exitSelectionMode()
         drawerRoot.visibility = View.VISIBLE
         etSearch.text.clear()
         appAdapter.submitList(allApps)
         etSearch.requestFocus()
 
-        // Immediate keyboard popup (e.g. ParBoard)
+        // Immediate keyboard popup
         val insetsController = WindowInsetsControllerCompat(window, etSearch)
         insetsController.show(WindowInsetsCompat.Type.ime())
 
@@ -190,6 +276,7 @@ class MainActivity : Activity() {
     }
 
     private fun closeDrawer() {
+        exitSelectionMode()
         val insetsController = WindowInsetsControllerCompat(window, etSearch)
         insetsController.hide(WindowInsetsCompat.Type.ime())
 
@@ -217,50 +304,68 @@ class MainActivity : Activity() {
     }
 
     private fun refreshFavoritesOnHome() {
-        val favorites = favoritesRepository.getFavorites()
-        val deadFavorites = ArrayList<Pair<String, String>>()
-        val favoriteApps = ArrayList<AppItem>()
+        val currentMode = favoritesRepository.getLayoutMode()
 
-        for (fav in favorites) {
-            val matchingApp = allApps.firstOrNull { it.packageName == fav.first && it.activityName == fav.second }
-            if (matchingApp == null) {
-                deadFavorites.add(fav)
-                continue
+        if (currentMode == LayoutMode.ALL_APPS) {
+            btnOpenDrawer.visibility = View.GONE
+            tvFavoritesTitle.visibility = View.GONE
+            favoritesAdapter.submitList(allApps)
+        } else {
+            btnOpenDrawer.visibility = View.VISIBLE
+            tvFavoritesTitle.visibility = View.VISIBLE
+            tvFavoritesTitle.text = "برنامه‌های برگزیده"
+
+            val favorites = favoritesRepository.getFavorites()
+            val deadFavorites = ArrayList<Pair<String, String>>()
+            val favoriteApps = ArrayList<AppItem>()
+
+            for (fav in favorites) {
+                val matchingApp = allApps.firstOrNull { it.packageName == fav.first && it.activityName == fav.second }
+                if (matchingApp == null) {
+                    deadFavorites.add(fav)
+                    continue
+                }
+                favoriteApps.add(matchingApp)
             }
-            favoriteApps.add(matchingApp)
-        }
 
-        for (dead in deadFavorites) {
-            favoritesRepository.removeFavorite(dead.first, dead.second)
-        }
+            for (dead in deadFavorites) {
+                favoritesRepository.removeFavorite(dead.first, dead.second)
+            }
 
-        favoritesAdapter.submitList(favoriteApps)
+            favoritesAdapter.submitList(favoriteApps)
+        }
     }
 
     private fun showAppOptionsDialog(item: AppItem) {
         val isFav = favoritesRepository.isFavorite(item.packageName, item.activityName)
-        val options: Array<CharSequence> = if (isFav) {
-            arrayOf(getString(R.string.unpin_from_favorites))
+        val favOption = if (isFav) {
+            getString(R.string.unpin_from_favorites)
         } else {
-            arrayOf(getString(R.string.pin_to_favorites))
+            getString(R.string.pin_to_favorites)
         }
+
+        val options: Array<CharSequence> = arrayOf(
+            favOption,
+            "انتخاب چندتایی برنامه‌ها..."
+        )
 
         AlertDialog.Builder(this)
             .setTitle(item.label)
             .setItems(options) { _, which ->
-                if (which == 0) {
-                    if (isFav) {
-                        favoritesRepository.removeFavorite(item.packageName, item.activityName)
-                        Toast.makeText(this, "از علاقه‌مندی‌ها حذف شد", Toast.LENGTH_SHORT).show()
-                    } else {
-                        val added = favoritesRepository.addFavorite(item.packageName, item.activityName)
-                        if (!added) {
-                            Toast.makeText(this, getString(R.string.max_favorites_reached), Toast.LENGTH_SHORT).show()
+                when (which) {
+                    0 -> {
+                        if (isFav) {
+                            favoritesRepository.removeFavorite(item.packageName, item.activityName)
+                            Toast.makeText(this, "از علاقه‌مندی‌ها حذف شد", Toast.LENGTH_SHORT).show()
                         } else {
+                            favoritesRepository.addFavorite(item.packageName, item.activityName)
                             Toast.makeText(this, "به علاقه‌مندی‌ها اضافه شد", Toast.LENGTH_SHORT).show()
                         }
+                        refreshFavoritesOnHome()
                     }
-                    refreshFavoritesOnHome()
+                    1 -> {
+                        enterSelectionMode(item)
+                    }
                 }
             }
             .show()
@@ -275,6 +380,46 @@ class MainActivity : Activity() {
                 refreshFavoritesOnHome()
             }
             .setNegativeButton("انصراف", null)
+            .show()
+    }
+
+    private fun showSettingsDialog() {
+        val currentMode = favoritesRepository.getLayoutMode()
+        val modeActionText = if (currentMode == LayoutMode.ALL_APPS) {
+            "تغییر چیدمان به: با اپ دراور و جستجو"
+        } else {
+            "تغییر چیدمان به: تمام برنامه‌ها در صفحه اصلی"
+        }
+
+        val options: Array<CharSequence> = arrayOf(
+            modeActionText,
+            getString(R.string.set_as_default_launcher)
+        )
+
+        AlertDialog.Builder(this)
+            .setTitle("تنظیمات پر لانچر")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> {
+                        val newMode = if (currentMode == LayoutMode.ALL_APPS) {
+                            LayoutMode.DRAWER
+                        } else {
+                            LayoutMode.ALL_APPS
+                        }
+                        favoritesRepository.setLayoutMode(newMode)
+                        val modeName = if (newMode == LayoutMode.ALL_APPS) "تمام برنامه‌ها در صفحه اصلی" else "با اپ دراور"
+                        Toast.makeText(this, "حالت چیدمان: $modeName", Toast.LENGTH_SHORT).show()
+                        refreshFavoritesOnHome()
+                    }
+                    1 -> {
+                        try {
+                            startActivity(DefaultRoleHelper.createSetDefaultIntent(this))
+                        } catch (e: Exception) {
+                            // Ignore
+                        }
+                    }
+                }
+            }
             .show()
     }
 
