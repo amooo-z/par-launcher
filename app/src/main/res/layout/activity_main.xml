@@ -76,13 +76,23 @@
             android:layout_marginBottom="8dp" />
 
         <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rv_favorites"
+            android:id="@+id/rv_home_pager"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
             android:clipToPadding="false"
-            android:overScrollMode="never"
-            android:nestedScrollingEnabled="false" />
+            android:overScrollMode="never" />
+
+        <!-- Page Indicator Dots -->
+        <LinearLayout
+            android:id="@+id/layout_page_dots"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingTop="4dp"
+            android:paddingBottom="10dp"
+            android:visibility="gone" />
 
         <!-- Search Trigger / Swipe-up indicator -->
         <LinearLayout

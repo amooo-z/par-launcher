@@ -22,6 +22,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.parboard.launcher.R
 import com.parboard.launcher.data.AppRepository
@@ -44,8 +45,10 @@ class MainActivity : Activity() {
     private lateinit var tvDefaultPrompt: TextView
     private lateinit var tvFavoritesTitle: TextView
     private lateinit var btnOpenDrawer: View
-    private lateinit var rvFavorites: RecyclerView
-    private lateinit var favoritesAdapter: FavoritesAdapter
+    private lateinit var rvHomePager: RecyclerView
+    private lateinit var layoutPageDots: LinearLayout
+    private lateinit var homePagerAdapter: HomePagerAdapter
+    private lateinit var pagerSnapHelper: PagerSnapHelper
 
     // Drawer search & selection
     private lateinit var layoutSearchBar: LinearLayout
@@ -81,7 +84,7 @@ class MainActivity : Activity() {
         favoritesRepository = FavoritesRepository.create(this)
 
         initViews()
-        setupFavoritesRecyclerView()
+        setupHomePager()
         setupDrawerRecyclerView()
         setupSearch()
         setupSelectionBar()
@@ -97,7 +100,8 @@ class MainActivity : Activity() {
         tvDefaultPrompt = findViewById(R.id.tv_default_prompt)
         tvFavoritesTitle = findViewById(R.id.tv_favorites_title)
         btnOpenDrawer = findViewById(R.id.btn_open_drawer)
-        rvFavorites = findViewById(R.id.rv_favorites)
+        rvHomePager = findViewById(R.id.rv_home_pager)
+        layoutPageDots = findViewById(R.id.layout_page_dots)
 
         // Drawer components
         layoutSearchBar = findViewById(R.id.layout_search_bar)
@@ -133,22 +137,114 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun setupFavoritesRecyclerView() {
-        favoritesAdapter = FavoritesAdapter(
-            onItemClick = { item ->
+    private fun setupHomePager() {
+        homePagerAdapter = HomePagerAdapter(
+            onAppClick = { item ->
                 AppLauncher.launch(this, item)
             },
-            onItemLongClick = { item ->
+            onAppLongClick = { item, pageIndex, totalPages ->
                 if (favoritesRepository.getLayoutMode() == LayoutMode.DRAWER) {
-                    showUnpinDialog(item)
+                    showPageAppOptionsDialog(item, pageIndex, totalPages)
                 } else {
                     showSettingsDialog()
                 }
+            },
+            onItemMovedWithinPage = { pageIndex, fromPos, toPos ->
+                favoritesRepository.swapFavorites(pageIndex, fromPos, toPos)
             }
         )
-        rvFavorites.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 5)
-        rvFavorites.setHasFixedSize(true)
-        rvFavorites.adapter = favoritesAdapter
+
+        val layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        rvHomePager.layoutManager = layoutManager
+        rvHomePager.adapter = homePagerAdapter
+
+        pagerSnapHelper = PagerSnapHelper()
+        pagerSnapHelper.attachToRecyclerView(rvHomePager)
+
+        rvHomePager.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    val snapView = pagerSnapHelper.findSnapView(layoutManager)
+                    if (snapView != null) {
+                        val currentPos = layoutManager.getPosition(snapView)
+                        updatePageDots(currentPos, homePagerAdapter.itemCount)
+                    }
+                }
+            }
+        })
+    }
+
+    private fun updatePageDots(currentPage: Int, totalPages: Int) {
+        if (totalPages <= 1) {
+            layoutPageDots.visibility = View.GONE
+            return
+        }
+
+        layoutPageDots.visibility = View.VISIBLE
+        layoutPageDots.removeAllViews()
+
+        val dotSize = (6 * resources.displayMetrics.density).toInt()
+        val dotMargin = (4 * resources.displayMetrics.density).toInt()
+
+        for (i in 0 until totalPages) {
+            val dot = View(this).apply {
+                val params = LinearLayout.LayoutParams(dotSize, dotSize).apply {
+                    setMargins(dotMargin, 0, dotMargin, 0)
+                }
+                layoutParams = params
+                setBackgroundResource(
+                    if (i == currentPage) R.drawable.dot_active else R.drawable.dot_inactive
+                )
+            }
+            layoutPageDots.addView(dot)
+        }
+    }
+
+    private fun showPageAppOptionsDialog(item: AppItem, pageIndex: Int, totalPages: Int) {
+        val options = mutableListOf<CharSequence>()
+        options.add("حذف از برگزیده‌ها")
+
+        if (pageIndex > 0) {
+            options.add("انتقال به صفحه قبلی (صفحه ${pageIndex})")
+        }
+
+        if (pageIndex < totalPages - 1) {
+            options.add("انتقال به صفحه بعدی (صفحه ${pageIndex + 2})")
+        }
+
+        options.add("ایجاد صفحه جدید و انتقال به آن")
+
+        AlertDialog.Builder(this)
+            .setTitle(item.label)
+            .setItems(options.toTypedArray()) { _, which ->
+                val selectedOption = options[which].toString()
+                when {
+                    selectedOption.startsWith("حذف") -> {
+                        favoritesRepository.removeFavorite(item.packageName, item.activityName)
+                        Toast.makeText(this, "از برگزیده‌ها حذف شد", Toast.LENGTH_SHORT).show()
+                        refreshFavoritesOnHome()
+                    }
+                    selectedOption.startsWith("انتقال به صفحه قبلی") -> {
+                        favoritesRepository.moveFavoriteToPrevPage(item.packageName, item.activityName)
+                        Toast.makeText(this, "به صفحه قبلی منتقل شد", Toast.LENGTH_SHORT).show()
+                        refreshFavoritesOnHome()
+                        rvHomePager.post { rvHomePager.smoothScrollToPosition((pageIndex - 1).coerceAtLeast(0)) }
+                    }
+                    selectedOption.startsWith("انتقال به صفحه بعدی") -> {
+                        favoritesRepository.moveFavoriteToNextPage(item.packageName, item.activityName)
+                        Toast.makeText(this, "به صفحه بعدی منتقل شد", Toast.LENGTH_SHORT).show()
+                        refreshFavoritesOnHome()
+                        rvHomePager.post { rvHomePager.smoothScrollToPosition(pageIndex + 1) }
+                    }
+                    selectedOption.startsWith("ایجاد صفحه جدید") -> {
+                        favoritesRepository.moveFavoriteToNewPage(item.packageName, item.activityName)
+                        Toast.makeText(this, "صفحه جدید ایجاد شد", Toast.LENGTH_SHORT).show()
+                        refreshFavoritesOnHome()
+                        rvHomePager.post { rvHomePager.smoothScrollToPosition(totalPages) }
+                    }
+                }
+            }
+            .show()
     }
 
     private fun setupDrawerRecyclerView() {
@@ -309,30 +405,44 @@ class MainActivity : Activity() {
         if (currentMode == LayoutMode.ALL_APPS) {
             btnOpenDrawer.visibility = View.GONE
             tvFavoritesTitle.visibility = View.GONE
-            favoritesAdapter.submitList(allApps)
+            // In ALL_APPS mode, paginate allApps (25 apps per page)
+            val pages = if (allApps.isEmpty()) listOf(emptyList()) else allApps.chunked(25)
+            homePagerAdapter.submitPages(pages)
+            updatePageDots(0, pages.size)
         } else {
             btnOpenDrawer.visibility = View.VISIBLE
             tvFavoritesTitle.visibility = View.VISIBLE
             tvFavoritesTitle.text = "برنامه‌های برگزیده"
 
-            val favorites = favoritesRepository.getFavorites()
+            val storedPages = favoritesRepository.getPages()
             val deadFavorites = ArrayList<Pair<String, String>>()
-            val favoriteApps = ArrayList<AppItem>()
+            val validPages = ArrayList<List<AppItem>>()
 
-            for (fav in favorites) {
-                val matchingApp = allApps.firstOrNull { it.packageName == fav.first && it.activityName == fav.second }
-                if (matchingApp == null) {
-                    deadFavorites.add(fav)
-                    continue
+            for (page in storedPages) {
+                val pageApps = ArrayList<AppItem>()
+                for (fav in page) {
+                    val matchingApp = allApps.firstOrNull { it.packageName == fav.first && it.activityName == fav.second }
+                    if (matchingApp == null) {
+                        deadFavorites.add(fav)
+                        continue
+                    }
+                    pageApps.add(matchingApp)
                 }
-                favoriteApps.add(matchingApp)
+                if (pageApps.isNotEmpty()) {
+                    validPages.add(pageApps)
+                }
             }
 
             for (dead in deadFavorites) {
                 favoritesRepository.removeFavorite(dead.first, dead.second)
             }
 
-            favoritesAdapter.submitList(favoriteApps)
+            val finalPages = if (validPages.isEmpty()) listOf(emptyList()) else validPages
+            homePagerAdapter.submitPages(finalPages)
+
+            val layoutManager = rvHomePager.layoutManager as? LinearLayoutManager
+            val currentPos = layoutManager?.findFirstVisibleItemPosition()?.coerceAtLeast(0) ?: 0
+            updatePageDots(currentPos.coerceIn(0, (finalPages.size - 1).coerceAtLeast(0)), finalPages.size)
         }
     }
 
@@ -368,18 +478,6 @@ class MainActivity : Activity() {
                     }
                 }
             }
-            .show()
-    }
-
-    private fun showUnpinDialog(item: AppItem) {
-        AlertDialog.Builder(this)
-            .setTitle(item.label)
-            .setMessage("آیا می‌خواهید این برنامه از علاقه‌مندی‌ها حذف شود؟")
-            .setPositiveButton("حذف") { _, _ ->
-                favoritesRepository.removeFavorite(item.packageName, item.activityName)
-                refreshFavoritesOnHome()
-            }
-            .setNegativeButton("انصراف", null)
             .show()
     }
 

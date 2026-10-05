@@ -21,76 +21,111 @@ class FavoritesRepositoryTest {
     }
 
     @Test
-    fun testEmptyFavoritesByDefault() {
-        val favs = repository.getFavorites()
-        assertTrue(favs.isEmpty())
+    fun testEmptyPagesByDefault() {
+        val pages = repository.getPages()
+        assertEquals(1, pages.size)
+        assertTrue(pages[0].isEmpty())
     }
 
     @Test
-    fun testAddAndRetrieveFavorite() {
-        val added = repository.addFavorite("com.android.settings", ".Settings")
-        assertTrue(added)
-        assertTrue(repository.isFavorite("com.android.settings", ".Settings"))
+    fun testAddAndRetrieveMultiPages() {
+        val page0 = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"))
+        val page1 = listOf(Pair("com.app3", ".A3"))
 
-        val favs = repository.getFavorites()
-        assertEquals(1, favs.size)
-        assertEquals("com.android.settings", favs[0].first)
-        assertEquals(".Settings", favs[0].second)
+        repository.savePages(listOf(page0, page1))
+
+        val loadedPages = repository.getPages()
+        assertEquals(2, loadedPages.size)
+        assertEquals(2, loadedPages[0].size)
+        assertEquals(1, loadedPages[1].size)
+        assertEquals("com.app1", loadedPages[0][0].first)
+        assertEquals("com.app3", loadedPages[1][0].first)
     }
 
     @Test
-    fun testPreventDuplicateFavorites() {
-        repository.addFavorite("com.android.settings", ".Settings")
-        val addedAgain = repository.addFavorite("com.android.settings", ".Settings")
-        assertFalse(addedAgain)
-        assertEquals(1, repository.getFavorites().size)
+    fun testAutoPruneEmptyPages() {
+        val page0 = listOf(Pair("com.app1", ".A1"))
+        val page1 = emptyList<Pair<String, String>>()
+        val page2 = listOf(Pair("com.app2", ".A2"))
+
+        repository.savePages(listOf(page0, page1, page2))
+
+        val loaded = repository.getPages()
+        assertEquals(2, loaded.size)
+        assertEquals("com.app1", loaded[0][0].first)
+        assertEquals("com.app2", loaded[1][0].first)
     }
 
     @Test
-    fun testRemoveFavorite() {
-        repository.addFavorite("com.android.settings", ".Settings")
-        val removed = repository.removeFavorite("com.android.settings", ".Settings")
-        assertTrue(removed)
-        assertFalse(repository.isFavorite("com.android.settings", ".Settings"))
-        assertTrue(repository.getFavorites().isEmpty())
+    fun testMoveFavoriteBetweenPages() {
+        val page0 = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"))
+        val page1 = listOf(Pair("com.app3", ".A3"))
+        repository.savePages(listOf(page0, page1))
+
+        // Move app2 to page 1
+        repository.moveFavorite(fromPage = 0, fromPos = 1, toPage = 1, toPos = 1)
+
+        val loaded = repository.getPages()
+        assertEquals(2, loaded.size)
+        assertEquals(1, loaded[0].size)
+        assertEquals("com.app1", loaded[0][0].first)
+        assertEquals(2, loaded[1].size)
+        assertEquals("com.app3", loaded[1][0].first)
+        assertEquals("com.app2", loaded[1][1].first)
     }
 
     @Test
-    fun testUnlimitedFavorites() {
-        // Can add more than 7 favorites (unlimited)
-        for (i in 1..25) {
-            val added = repository.addFavorite("com.app$i", ".Main")
-            assertTrue("App $i should be added", added)
-        }
-        assertEquals(25, repository.getFavorites().size)
+    fun testMoveToNewPageAtEnd() {
+        val page0 = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"))
+        repository.savePages(listOf(page0))
+
+        // Move app2 to a newly created page 1
+        repository.moveFavorite(fromPage = 0, fromPos = 1, toPage = 1, toPos = 0)
+
+        val loaded = repository.getPages()
+        assertEquals(2, loaded.size)
+        assertEquals("com.app1", loaded[0][0].first)
+        assertEquals("com.app2", loaded[1][0].first)
     }
 
     @Test
-    fun testBatchAddFavorites() {
-        val batch = listOf(
-            Pair("com.app1", ".Main"),
-            Pair("com.app2", ".Main"),
-            Pair("com.app3", ".Main")
-        )
-        val addedCount = repository.addFavorites(batch)
-        assertEquals(3, addedCount)
-        assertEquals(3, repository.getFavorites().size)
+    fun testFlatFavoritesListMaintainsAllItems() {
+        val page0 = listOf(Pair("com.app1", ".A1"))
+        val page1 = listOf(Pair("com.app2", ".A2"))
+        repository.savePages(listOf(page0, page1))
 
-        // Adding again with duplicates
-        val duplicateBatch = listOf(
-            Pair("com.app3", ".Main"),
-            Pair("com.app4", ".Main")
-        )
-        val secondAdded = repository.addFavorites(duplicateBatch)
-        assertEquals(1, secondAdded) // only app4 was added
-        assertEquals(4, repository.getFavorites().size)
+        val flat = repository.getFavorites()
+        assertEquals(2, flat.size)
+        assertTrue(repository.isFavorite("com.app1", ".A1"))
+        assertTrue(repository.isFavorite("com.app2", ".A2"))
     }
 
     @Test
-    fun testLayoutModePersistence() {
-        assertEquals(LayoutMode.DRAWER, repository.getLayoutMode())
-        repository.setLayoutMode(LayoutMode.ALL_APPS)
-        assertEquals(LayoutMode.ALL_APPS, repository.getLayoutMode())
+    fun testSwapFavoritesWithinPage() {
+        val page0 = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"), Pair("com.app3", ".A3"))
+        repository.savePages(listOf(page0))
+
+        repository.swapFavorites(page = 0, fromPos = 0, toPos = 2)
+
+        val loaded = repository.getPages()
+        assertEquals(1, loaded.size)
+        assertEquals("com.app3", loaded[0][0].first)
+        assertEquals("com.app2", loaded[0][1].first)
+        assertEquals("com.app1", loaded[0][2].first)
+    }
+
+    @Test
+    fun testMoveFavoriteToNewPageMethod() {
+        val page0 = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"))
+        repository.savePages(listOf(page0))
+
+        val result = repository.moveFavoriteToNewPage("com.app1", ".A1")
+        assertTrue(result)
+
+        val loaded = repository.getPages()
+        assertEquals(2, loaded.size)
+        assertEquals("com.app2", loaded[0][0].first)
+        assertEquals("com.app1", loaded[1][0].first)
     }
 }
 
