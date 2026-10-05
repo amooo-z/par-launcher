@@ -148,36 +148,53 @@
             android:layout_marginBottom="10dp"
             android:overScrollMode="never" />
 
-        <!-- Search Trigger / Swipe-up indicator -->
-        <LinearLayout
+        <!-- Search Trigger / Swipe-up indicator / Gesture Pill -->
+        <FrameLayout
             android:id="@+id/btn_open_drawer"
             android:layout_width="match_parent"
             android:layout_height="52dp"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
             android:background="#15FFFFFF"
             android:clickable="true"
             android:focusable="true">
 
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/search_hint"
-                android:textColor="@color/text_hint"
-                android:textSize="15sp"
-                android:fontFamily="@font/vazirmatn" />
+            <LinearLayout
+                android:id="@+id/layout_drawer_trigger"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="▲"
-                android:textColor="@color/text_hint"
-                android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/tv_search_hint"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/search_hint"
+                    android:textColor="@color/text_hint"
+                    android:textSize="15sp"
+                    android:fontFamily="@font/vazirmatn" />
 
-        </LinearLayout>
+                <TextView
+                    android:id="@+id/tv_drawer_arrow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="▲"
+                    android:textColor="@color/text_hint"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
+
+            <View
+                android:id="@+id/view_gesture_pill"
+                android:layout_width="44dp"
+                android:layout_height="4dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_gesture_pill"
+                android:visibility="gone" />
+
+        </FrameLayout>
 
     </LinearLayout>
 

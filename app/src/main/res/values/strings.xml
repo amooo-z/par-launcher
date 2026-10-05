@@ -8,4 +8,5 @@
     <string name="set_as_default_launcher">انتخاب به عنوان لانچر پیش‌فرض</string>
     <string name="default_launcher_prompt">پر لانچر را به عنوان لانچر پیش‌فرض خود تنظیم کنید</string>
     <string name="max_favorites_reached">حداکثر ۷ برنامه می‌تواند برگزیده باشد.</string>
+    <string name="accessibility_service_desc">جهت باز کردن سریع صفحهٔ برنامه‌های اخیر (Recent Apps) با بالا کشیدن نوار پایین لانچر.</string>
 </resources>

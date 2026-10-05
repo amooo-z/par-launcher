@@ -152,6 +152,10 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
 
     fun addFavoriteAt(pageIndex: Int, pos: Int, item: Pair<String, String>) {
         val pages = getPages().map { it.toMutableList() }.toMutableList()
+        // Remove any existing duplicate of this package across all pages
+        for (p in pages) {
+            p.removeAll { it.first == item.first }
+        }
         while (pages.size <= pageIndex) {
             pages.add(mutableListOf())
         }
@@ -270,6 +274,7 @@ class FavoritesRepository(private val prefs: SharedPreferences) {
 
     fun addDockAppAt(pos: Int, item: Pair<String, String>): Boolean {
         val apps = getDockApps().toMutableList()
+        apps.removeAll { it.first == item.first }
         if (apps.size >= 5) return false
         val clampedPos = pos.coerceIn(0, apps.size)
         apps.add(clampedPos, item)

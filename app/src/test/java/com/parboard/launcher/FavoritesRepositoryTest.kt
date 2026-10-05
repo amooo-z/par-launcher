@@ -114,6 +114,36 @@ class FavoritesRepositoryTest {
         assertEquals(1, pages[1].size)
         assertEquals("com.app20", pages[1][0].first)
     }
+
+    @Test
+    fun testAddFavoriteDeduplication() {
+        val page0 = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"))
+        val page1 = listOf(Pair("com.app3", ".A3"))
+        repository.savePages(listOf(page0, page1))
+
+        // Adding com.app1 to page 1 must remove it from page 0
+        repository.addFavoriteAt(1, 0, Pair("com.app1", ".A1"))
+
+        val pages = repository.getPages()
+        assertEquals(2, pages.size)
+        assertEquals(1, pages[0].size)
+        assertEquals("com.app2", pages[0][0].first)
+        assertEquals(2, pages[1].size)
+        assertEquals("com.app1", pages[1][0].first)
+        assertEquals("com.app3", pages[1][1].first)
+    }
+
+    @Test
+    fun testAddDockAppDeduplication() {
+        val dockApps = listOf(Pair("com.app1", ".A1"), Pair("com.app2", ".A2"))
+        repository.saveDockApps(dockApps)
+
+        repository.addDockAppAt(0, Pair("com.app2", ".A2"))
+        val loaded = repository.getDockApps()
+        assertEquals(2, loaded.size)
+        assertEquals("com.app2", loaded[0].first)
+        assertEquals("com.app1", loaded[1].first)
+    }
 }
 
 class FakeSharedPreferences : SharedPreferences {
