@@ -118,14 +118,8 @@ class MainActivity : Activity() {
             openDrawer()
         }
 
-        // Long-click on home container or clock opens Settings Dialog to switch modes
-        homeContainer.setOnLongClickListener {
+        findViewById<View>(R.id.btn_settings).setOnClickListener {
             showSettingsDialog()
-            true
-        }
-        findViewById<View>(R.id.clock_date_container).setOnLongClickListener {
-            showSettingsDialog()
-            true
         }
 
         tvDefaultPrompt.setOnClickListener {
@@ -143,11 +137,7 @@ class MainActivity : Activity() {
                 AppLauncher.launch(this, item)
             },
             onAppLongClick = { item, pageIndex, totalPages ->
-                if (favoritesRepository.getLayoutMode() == LayoutMode.DRAWER) {
-                    showPageAppOptionsDialog(item, pageIndex, totalPages)
-                } else {
-                    showSettingsDialog()
-                }
+                showPageAppOptionsDialog(item, pageIndex, totalPages)
             },
             onItemMovedWithinPage = { pageIndex, fromPos, toPos ->
                 favoritesRepository.swapFavorites(pageIndex, fromPos, toPos)
@@ -202,7 +192,12 @@ class MainActivity : Activity() {
 
     private fun showPageAppOptionsDialog(item: AppItem, pageIndex: Int, totalPages: Int) {
         val options = mutableListOf<CharSequence>()
-        options.add("حذف از برگزیده‌ها")
+
+        options.add("اطلاعات برنامه (تنظیمات سیستم)")
+
+        if (favoritesRepository.getLayoutMode() == LayoutMode.DRAWER) {
+            options.add("حذف از برگزیده‌ها")
+        }
 
         if (pageIndex > 0) {
             options.add("انتقال به صفحه قبلی (صفحه ${pageIndex})")
@@ -219,6 +214,9 @@ class MainActivity : Activity() {
             .setItems(options.toTypedArray()) { _, which ->
                 val selectedOption = options[which].toString()
                 when {
+                    selectedOption.startsWith("اطلاعات برنامه") -> {
+                        AppLauncher.openAppDetails(this, item.packageName)
+                    }
                     selectedOption.startsWith("حذف") -> {
                         favoritesRepository.removeFavorite(item.packageName, item.activityName)
                         Toast.makeText(this, "از برگزیده‌ها حذف شد", Toast.LENGTH_SHORT).show()
@@ -456,6 +454,7 @@ class MainActivity : Activity() {
 
         val options: Array<CharSequence> = arrayOf(
             favOption,
+            "اطلاعات برنامه (تنظیمات سیستم)",
             "انتخاب چندتایی برنامه‌ها..."
         )
 
@@ -474,6 +473,9 @@ class MainActivity : Activity() {
                         refreshFavoritesOnHome()
                     }
                     1 -> {
+                        AppLauncher.openAppDetails(this, item.packageName)
+                    }
+                    2 -> {
                         enterSelectionMode(item)
                     }
                 }

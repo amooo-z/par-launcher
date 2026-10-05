@@ -32,37 +32,58 @@
             android:gravity="center"
             android:visibility="gone" />
 
-        <!-- Clock & Solar Hijri Date -->
-        <LinearLayout
+        <!-- Clock & Solar Hijri Date with Settings Button -->
+        <RelativeLayout
             android:id="@+id/clock_date_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
             android:layout_marginTop="24dp"
             android:layout_marginBottom="32dp">
 
-            <TextClock
-                android:id="@+id/tc_clock"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:format12Hour="HH:mm"
-                android:format24Hour="HH:mm"
-                android:textColor="@color/text_primary"
-                android:textSize="58sp"
-                android:fontFamily="@font/vazirmatn"
-                android:textStyle="bold"
-                android:includeFontPadding="false" />
+                android:orientation="vertical"
+                android:layout_alignParentStart="true">
+
+                <TextClock
+                    android:id="@+id/tc_clock"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:format12Hour="HH:mm"
+                    android:format24Hour="HH:mm"
+                    android:textColor="@color/text_primary"
+                    android:textSize="58sp"
+                    android:fontFamily="@font/vazirmatn"
+                    android:textStyle="bold"
+                    android:includeFontPadding="false" />
+
+                <TextView
+                    android:id="@+id/tv_persian_date"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="17sp"
+                    android:fontFamily="@font/vazirmatn" />
+
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/tv_persian_date"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:id="@+id/btn_settings"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_alignParentEnd="true"
+                android:layout_alignParentTop="true"
+                android:gravity="center"
+                android:text="⚙"
                 android:textColor="@color/text_secondary"
-                android:textSize="17sp"
-                android:fontFamily="@font/vazirmatn" />
+                android:textSize="22sp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true" />
 
-        </LinearLayout>
+        </RelativeLayout>
 
         <!-- Pinned Favorites Container -->
         <TextView
