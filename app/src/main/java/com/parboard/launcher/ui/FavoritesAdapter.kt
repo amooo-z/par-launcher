@@ -124,6 +124,20 @@ class FavoritesAdapter(
                 onDragStarted?.invoke(dragData)
                 true
             }
+
+            itemView.setOnDragListener { v, event ->
+                when (event.action) {
+                    android.view.DragEvent.ACTION_DRAG_STARTED -> true
+                    android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                        v.animate().cancel()
+                        v.scaleX = 1.0f
+                        v.scaleY = 1.0f
+                        v.alpha = 1.0f
+                        true
+                    }
+                    else -> false
+                }
+            }
         }
     }
 }

@@ -251,7 +251,10 @@ class MainActivity : Activity() {
             }
         )
 
-        rvDock.layoutManager = GridLayoutManager(this, 5)
+        rvDock.layoutManager = object : GridLayoutManager(this, 5) {
+            override fun canScrollVertically(): Boolean = false
+        }
+        rvDock.overScrollMode = View.OVER_SCROLL_NEVER
         rvDock.adapter = dockAdapter
 
         // Listen for drops into bottom dock
@@ -270,6 +273,46 @@ class MainActivity : Activity() {
                 }
                 else -> true
             }
+        }
+
+        // Listen for drops outside dock (dragging downwards or onto bottom bar) to remove from dock
+        btnOpenDrawer.setOnDragListener { _, event ->
+            when (event.action) {
+                DragEvent.ACTION_DROP -> {
+                    val dragData = event.localState as? DraggedAppData ?: return@setOnDragListener false
+                    handleDropOutsideDock(dragData)
+                    true
+                }
+                else -> true
+            }
+        }
+
+        homeContainer.setOnDragListener { _, event ->
+            when (event.action) {
+                DragEvent.ACTION_DROP -> {
+                    val dragData = event.localState as? DraggedAppData ?: return@setOnDragListener false
+                    handleDropOutsideDock(dragData)
+                    true
+                }
+                DragEvent.ACTION_DRAG_ENDED -> {
+                    refreshFavoritesOnHome()
+                    refreshDock()
+                    true
+                }
+                else -> true
+            }
+        }
+    }
+
+    private fun handleDropOutsideDock(dragData: DraggedAppData) {
+        if (dragData.source == "DOCK") {
+            favoritesRepository.removeDockAppAt(dragData.sourcePos)
+            refreshDock()
+            Toast.makeText(this, "برنامه از داک حذف شد", Toast.LENGTH_SHORT).show()
+        } else if (dragData.source == "PAGE" && favoritesRepository.getLayoutMode() == LayoutMode.DRAWER) {
+            favoritesRepository.removeFavoriteAt(dragData.sourcePageIndex, dragData.sourcePos)
+            refreshFavoritesOnHome()
+            Toast.makeText(this, "از صفحه اصلی حذف شد", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -489,13 +532,6 @@ class MainActivity : Activity() {
     private fun loadApps() {
         allApps = appRepository.loadInstalledApps()
         appAdapter.submitList(allApps)
-
-        // If in ALL_APPS mode and repository has no pages yet, populate all apps
-        if (favoritesRepository.getLayoutMode() == LayoutMode.ALL_APPS && favoritesRepository.getFavorites().isEmpty()) {
-            val chunked = allApps.chunked(25).map { page -> page.map { Pair(it.packageName, it.activityName) } }
-            favoritesRepository.savePages(chunked)
-        }
-
         refreshFavoritesOnHome()
     }
 
@@ -511,13 +547,45 @@ class MainActivity : Activity() {
             tvFavoritesTitle.text = "برنامه‌های برگزیده"
         }
 
-        val storedPages = favoritesRepository.getPages()
-        val validPages = ArrayList<List<AppItem>>()
+        val storedPages = favoritesRepository.getPages().map { it.toMutableList() }.toMutableList()
 
+        if (currentMode == LayoutMode.ALL_APPS && allApps.isNotEmpty()) {
+            val placedPackages = HashSet<String>()
+            for (page in storedPages) {
+                for (item in page) {
+                    placedPackages.add(item.first)
+                }
+            }
+            val missingApps = allApps.filter { !placedPackages.contains(it.packageName) }
+            if (missingApps.isNotEmpty()) {
+                var missingIdx = 0
+                if (storedPages.isEmpty()) {
+                    storedPages.add(mutableListOf())
+                }
+                for (page in storedPages) {
+                    while (page.size < 20 && missingIdx < missingApps.size) {
+                        val app = missingApps[missingIdx++]
+                        page.add(Pair(app.packageName, app.activityName))
+                    }
+                }
+                while (missingIdx < missingApps.size) {
+                    val newPage = mutableListOf<Pair<String, String>>()
+                    while (newPage.size < 20 && missingIdx < missingApps.size) {
+                        val app = missingApps[missingIdx++]
+                        newPage.add(Pair(app.packageName, app.activityName))
+                    }
+                    storedPages.add(newPage)
+                }
+                favoritesRepository.savePages(storedPages)
+            }
+        }
+
+        val validPages = ArrayList<List<AppItem>>()
         for (page in storedPages) {
             val pageApps = ArrayList<AppItem>()
             for (fav in page) {
                 val matchingApp = allApps.firstOrNull { it.packageName == fav.first && it.activityName == fav.second }
+                    ?: allApps.firstOrNull { it.packageName == fav.first }
                 if (matchingApp != null) {
                     pageApps.add(matchingApp)
                 }
@@ -543,12 +611,18 @@ class MainActivity : Activity() {
             dockPairs = defaults
         }
 
+        val validPairs = mutableListOf<Pair<String, String>>()
         val dockApps = ArrayList<AppItem>()
         for (pair in dockPairs) {
             val matching = allApps.firstOrNull { it.packageName == pair.first && it.activityName == pair.second }
+                ?: allApps.firstOrNull { it.packageName == pair.first }
             if (matching != null) {
+                validPairs.add(Pair(matching.packageName, matching.activityName))
                 dockApps.add(matching)
             }
+        }
+        if (validPairs.size != dockPairs.size) {
+            favoritesRepository.saveDockApps(validPairs)
         }
         dockAdapter.submitList(dockApps)
     }
@@ -562,9 +636,9 @@ class MainActivity : Activity() {
                 val resolveInfo = pm.resolveActivity(intent, 0)
                 if (resolveInfo != null) {
                     val pkg = resolveInfo.activityInfo.packageName
-                    val act = resolveInfo.activityInfo.name
-                    if (pkg != packageName && candidates.none { it.first == pkg }) {
-                        candidates.add(Pair(pkg, act))
+                    val matching = allApps.firstOrNull { it.packageName == pkg }
+                    if (matching != null && candidates.none { it.first == pkg }) {
+                        candidates.add(Pair(matching.packageName, matching.activityName))
                     }
                 }
             } catch (e: Exception) {
@@ -572,16 +646,11 @@ class MainActivity : Activity() {
             }
         }
 
-        // 1. Phone / Dialer
         findIntentApp(Intent(Intent.ACTION_DIAL))
-        // 2. Messaging
         findIntentApp(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:")))
-        // 3. Browser
         findIntentApp(Intent(Intent.ACTION_VIEW, Uri.parse("https://google.com")))
-        // 4. Camera
         findIntentApp(Intent(MediaStore.ACTION_IMAGE_CAPTURE))
 
-        // Fill remaining from allApps up to 5
         for (app in allApps) {
             if (candidates.size >= 5) break
             if (candidates.none { it.first == app.packageName }) {
@@ -605,17 +674,17 @@ class MainActivity : Activity() {
             textSize = 15f
             setTextColor(0xFFFFFFFF.toInt())
             typeface = androidx.core.content.res.ResourcesCompat.getFont(this@MainActivity, R.font.vazirmatn)
-            setPadding(0, 0, 0, (14 * density).toInt())
+            setPadding(0, 0, 0, (12 * density).toInt())
             gravity = Gravity.CENTER
         }
         dialogView.addView(tvTitle)
 
         // Live preview box
         val previewBox = View(this).apply {
-            val size = (48 * density).toInt()
+            val size = (46 * density).toInt()
             val params = LinearLayout.LayoutParams(size, size).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = (16 * density).toInt()
+                bottomMargin = (14 * density).toInt()
             }
             layoutParams = params
         }
@@ -632,57 +701,71 @@ class MainActivity : Activity() {
         updatePreview(currentColor)
         dialogView.addView(previewBox)
 
-        // Presets container
-        val presetsLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, (16 * density).toInt())
-        }
-
-        val presets = listOf(
-            0xFF7F5AF0.toInt(), // One UI Violet
-            0xFF2196F3.toInt(), // Material Blue
-            0xFF00BCD4.toInt(), // Cyan
-            0xFF4CAF50.toInt(), // Emerald Green
-            0xFFFF9800.toInt(), // Orange
-            0xFFE91E63.toInt(), // Red
-            0xFFFFFFFF.toInt()  // Pure White
-        )
-
         var selectedColor = currentColor
+
         val etHex = EditText(this).apply {
             hint = "#RRGGBB یا #AARRGGBB"
             setTextColor(0xFFFFFFFF.toInt())
             setHintTextColor(0x80FFFFFF.toInt())
-            textSize = 14f
+            textSize = 13f
             setText(String.format("#%08X", currentColor))
             typeface = androidx.core.content.res.ResourcesCompat.getFont(this@MainActivity, R.font.vazirmatn)
             gravity = Gravity.CENTER
+            val hexParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (12 * density).toInt()
+            }
+            layoutParams = hexParams
         }
 
-        for (preset in presets) {
-            val circle = View(this).apply {
-                val cSize = (28 * density).toInt()
-                val cMargin = (4 * density).toInt()
-                val params = LinearLayout.LayoutParams(cSize, cSize).apply {
-                    setMargins(cMargin, 0, cMargin, 0)
-                }
-                layoutParams = params
-                val shape = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(preset)
-                    setStroke((1f * density).toInt(), 0x60FFFFFF.toInt())
-                }
-                background = shape
-                setOnClickListener {
-                    selectedColor = preset
-                    etHex.setText(String.format("#%08X", preset))
-                    updatePreview(preset)
-                }
-            }
-            presetsLayout.addView(circle)
+        // 30 curated Material & One UI colors grid (5 rows x 6 columns)
+        val paletteRows = listOf(
+            listOf(0xFFF44336.toInt(), 0xFFE91E63.toInt(), 0xFFFF5252.toInt(), 0xFFFF4081.toInt(), 0xFFD32F2F.toInt(), 0xFFC2185B.toInt()),
+            listOf(0xFF9C27B0.toInt(), 0xFF673AB7.toInt(), 0xFF7F5AF0.toInt(), 0xFF7C4DFF.toInt(), 0xFFB388FF.toInt(), 0xFF512DA8.toInt()),
+            listOf(0xFF2196F3.toInt(), 0xFF03A9F4.toInt(), 0xFF00BCD4.toInt(), 0xFF009688.toInt(), 0xFF448AFF.toInt(), 0xFF18FFFF.toInt()),
+            listOf(0xFF4CAF50.toInt(), 0xFF8BC34A.toInt(), 0xFFCDDC39.toInt(), 0xFFFFEB3B.toInt(), 0xFF2ECC71.toInt(), 0xFF1ABC9C.toInt()),
+            listOf(0xFFFF9800.toInt(), 0xFFFF5722.toInt(), 0xFFFFC107.toInt(), 0xFF795548.toInt(), 0xFF607D8B.toInt(), 0xFFFFFFFF.toInt())
+        )
+
+        val paletteContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, 0, 0, (12 * density).toInt())
         }
-        dialogView.addView(presetsLayout)
+
+        for (rowColors in paletteRows) {
+            val rowLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                setPadding(0, (2 * density).toInt(), 0, (2 * density).toInt())
+            }
+            for (color in rowColors) {
+                val circle = View(this).apply {
+                    val cSize = (28 * density).toInt()
+                    val cMargin = (3 * density).toInt()
+                    val params = LinearLayout.LayoutParams(cSize, cSize).apply {
+                        setMargins(cMargin, 0, cMargin, 0)
+                    }
+                    layoutParams = params
+                    val shape = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(color)
+                        setStroke((1f * density).toInt(), 0x40FFFFFF.toInt())
+                    }
+                    background = shape
+                    setOnClickListener {
+                        selectedColor = color
+                        etHex.setText(String.format("#%08X", color))
+                        updatePreview(color)
+                    }
+                }
+                rowLayout.addView(circle)
+            }
+            paletteContainer.addView(rowLayout)
+        }
+        dialogView.addView(paletteContainer)
 
         etHex.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -782,12 +865,6 @@ class MainActivity : Activity() {
                         favoritesRepository.setLayoutMode(newMode)
                         val modeName = if (newMode == LayoutMode.ALL_APPS) "تمام برنامه‌ها در صفحه اصلی" else "با اپ دراور"
                         Toast.makeText(this, "حالت چیدمان: $modeName", Toast.LENGTH_SHORT).show()
-
-                        if (newMode == LayoutMode.ALL_APPS && favoritesRepository.getFavorites().isEmpty()) {
-                            val chunked = allApps.chunked(25).map { page -> page.map { Pair(it.packageName, it.activityName) } }
-                            favoritesRepository.savePages(chunked)
-                        }
-
                         refreshFavoritesOnHome()
                     }
                     1 -> {

@@ -53,7 +53,11 @@ class HomePagerAdapter(
         private val gridAdapter: FavoritesAdapter
 
         init {
-            rvGrid.layoutManager = GridLayoutManager(itemView.context, 5)
+            rvGrid.layoutManager = object : GridLayoutManager(itemView.context, 5) {
+                override fun canScrollVertically(): Boolean = false
+            }
+            rvGrid.isNestedScrollingEnabled = false
+            rvGrid.overScrollMode = View.OVER_SCROLL_NEVER
             gridAdapter = FavoritesAdapter(
                 onItemClick = { item -> onAppClick(item) },
                 pageIndex = 0,
