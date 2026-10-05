@@ -27,9 +27,6 @@ import android.window.OnBackInvokedDispatcher
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import android.view.HapticFeedbackConstants
-import android.view.MotionEvent
-import android.view.ViewConfiguration
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.PagerSnapHelper
@@ -40,7 +37,6 @@ import com.parboard.launcher.data.FavoritesRepository
 import com.parboard.launcher.data.FavoritesRepository.LayoutMode
 import com.parboard.launcher.model.AppItem
 import com.parboard.launcher.model.DraggedAppData
-import com.parboard.launcher.service.LauncherAccessibilityService
 import com.parboard.launcher.util.AppLauncher
 import com.parboard.launcher.util.DateFormatter
 import com.parboard.launcher.util.DefaultRoleHelper
@@ -57,8 +53,6 @@ class MainActivity : Activity() {
     private lateinit var tvDefaultPrompt: TextView
     private lateinit var tvFavoritesTitle: TextView
     private lateinit var btnOpenDrawer: View
-    private lateinit var layoutDrawerTrigger: View
-    private lateinit var viewGesturePill: View
     private lateinit var rvHomePager: RecyclerView
     private lateinit var layoutPageDots: LinearLayout
     private lateinit var btnAddPage: TextView
@@ -119,8 +113,6 @@ class MainActivity : Activity() {
         tvDefaultPrompt = findViewById(R.id.tv_default_prompt)
         tvFavoritesTitle = findViewById(R.id.tv_favorites_title)
         btnOpenDrawer = findViewById(R.id.btn_open_drawer)
-        layoutDrawerTrigger = findViewById(R.id.layout_drawer_trigger)
-        viewGesturePill = findViewById(R.id.view_gesture_pill)
         rvHomePager = findViewById(R.id.rv_home_pager)
         layoutPageDots = findViewById(R.id.layout_page_dots)
         btnAddPage = findViewById(R.id.btn_add_page)
@@ -137,50 +129,8 @@ class MainActivity : Activity() {
         btnAddSelectedToHome = findViewById(R.id.btn_add_selected_to_home)
         rvApps = findViewById(R.id.rv_apps)
 
-        var touchStartY = 0f
-        var touchStartX = 0f
-        var isSwipeHandled = false
-        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
-        val swipeThreshold = 45 * resources.displayMetrics.density
-
-        btnOpenDrawer.setOnTouchListener { v, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    touchStartY = event.rawY
-                    touchStartX = event.rawX
-                    isSwipeHandled = false
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val deltaY = touchStartY - event.rawY
-                    val deltaX = Math.abs(event.rawX - touchStartX)
-                    if (!isSwipeHandled && deltaY > swipeThreshold && deltaY > deltaX) {
-                        isSwipeHandled = true
-                        v.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                        triggerOpenRecents()
-                        true
-                    } else {
-                        false
-                    }
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (!isSwipeHandled) {
-                        val deltaY = Math.abs(touchStartY - event.rawY)
-                        val deltaX = Math.abs(touchStartX - event.rawX)
-                        if (deltaY < touchSlop && deltaX < touchSlop) {
-                            if (favoritesRepository.getLayoutMode() == LayoutMode.DRAWER) {
-                                openDrawer()
-                            }
-                        }
-                    }
-                    true
-                }
-                MotionEvent.ACTION_CANCEL -> {
-                    isSwipeHandled = false
-                    false
-                }
-                else -> false
-            }
+        btnOpenDrawer.setOnClickListener {
+            openDrawer()
         }
 
         findViewById<View>(R.id.btn_settings).setOnClickListener {
@@ -593,18 +543,10 @@ class MainActivity : Activity() {
         val currentMode = favoritesRepository.getLayoutMode()
 
         if (currentMode == LayoutMode.ALL_APPS) {
-            layoutDrawerTrigger.visibility = View.GONE
-            viewGesturePill.visibility = View.VISIBLE
-            btnOpenDrawer.visibility = View.VISIBLE
-            btnOpenDrawer.layoutParams.height = (36 * resources.displayMetrics.density).toInt()
-            btnOpenDrawer.setBackgroundColor(Color.TRANSPARENT)
+            btnOpenDrawer.visibility = View.GONE
             tvFavoritesTitle.visibility = View.GONE
         } else {
-            layoutDrawerTrigger.visibility = View.VISIBLE
-            viewGesturePill.visibility = View.GONE
             btnOpenDrawer.visibility = View.VISIBLE
-            btnOpenDrawer.layoutParams.height = (52 * resources.displayMetrics.density).toInt()
-            btnOpenDrawer.setBackgroundColor(0x15FFFFFF)
             tvFavoritesTitle.visibility = View.VISIBLE
             tvFavoritesTitle.text = "برنامه‌های برگزیده"
         }
@@ -881,23 +823,6 @@ class MainActivity : Activity() {
             dockAdapter.hideAllColorBadges()
         }
         dialog.show()
-    }
-
-    private fun triggerOpenRecents() {
-        if (!LauncherAccessibilityService.openRecents()) {
-            showAccessibilityPromptDialog()
-        }
-    }
-
-    private fun showAccessibilityPromptDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("دسترسی باز کردن برنامه‌های اخیر")
-            .setMessage("برای باز شدن صفحهٔ برنامه‌های اخیراً باز شده (Recent Apps) با بالا کشیدن نوار پایین، لطفاً دسترسی سرویس ParLauncher را در بخش قابلیت دسترسی (Accessibility) فعال کنید.")
-            .setPositiveButton("فعال‌سازی در تنظیمات") { _, _ ->
-                LauncherAccessibilityService.requestEnable(this)
-            }
-            .setNegativeButton("انصراف", null)
-            .show()
     }
 
     private fun showAppOptionsDialog(item: AppItem) {

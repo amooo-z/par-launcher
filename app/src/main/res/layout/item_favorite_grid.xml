@@ -12,25 +12,26 @@
     android:focusable="true">
 
     <FrameLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content">
+        android:layout_width="54dp"
+        android:layout_height="54dp"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <View
             android:id="@+id/view_icon_square"
             android:layout_width="48dp"
             android:layout_height="48dp"
+            android:layout_gravity="center"
             android:background="@drawable/bg_hollow_square" />
 
         <TextView
             android:id="@+id/btn_icon_color_picker"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
             android:layout_gravity="top|end"
-            android:layout_marginTop="-4dp"
-            android:layout_marginEnd="-4dp"
             android:background="@drawable/bg_color_badge"
             android:text="🎨"
-            android:textSize="10sp"
+            android:textSize="12sp"
             android:gravity="center"
             android:visibility="gone"
             android:clickable="true"

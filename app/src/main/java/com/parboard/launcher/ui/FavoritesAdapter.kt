@@ -95,12 +95,13 @@ class FavoritesAdapter(
             val isBadgeVisible = (item.packageName == activeBadgePackage)
             btnColorPicker.visibility = if (isBadgeVisible) View.VISIBLE else View.GONE
             btnColorPicker.setOnClickListener {
-                hideAllColorBadges()
                 onColorPickerClick?.invoke(item)
             }
 
             itemView.setOnClickListener {
-                if (activeBadgePackage != null) {
+                if (activeBadgePackage == item.packageName) {
+                    onColorPickerClick?.invoke(item)
+                } else if (activeBadgePackage != null) {
                     hideAllColorBadges()
                 } else {
                     onItemClick(item)
