@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/amooo-z/par-launcher/releases"><img src="https://img.shields.io/github/v/release/amooo-z/par-launcher?color=blue&style=flat-square" alt="Release" /></a>
   <img src="https://img.shields.io/badge/APK_Size-~437_KB-brightgreen.svg?style=flat-square" alt="APK Size" />
   <img src="https://img.shields.io/badge/RAM_Usage-%3C_15_MB-success.svg?style=flat-square" alt="RAM Usage" />
   <img src="https://img.shields.io/badge/Android-8.0%2B_(API_26%2B)-blue.svg?style=flat-square" alt="Android Version" />
@@ -100,8 +101,8 @@ par-launcher/
 ## 📥 نصب و دریافت (Installation)
 
 ### ۱. نصب مستقیم فایل APK:
-آخرین فایل نصبی امضاشده (Release) را مستقیماً از مخزن یا بخش [Releases](https://github.com/amooo-z/par-launcher/releases) دانلود کرده و روی گوشی خود نصب کنید:
-* **[دانلود مستقیم ParLauncher-release.apk](ParLauncher-release.apk)** (~345 KB)
+آخرین فایل نصبی امضاشده را مستقیماً از بخش [Releases](https://github.com/amooo-z/par-launcher/releases) دانلود کرده و روی گوشی خود نصب کنید:
+* **[دانلود مستقیم ParLauncher-v1.0.0.apk](https://github.com/amooo-z/par-launcher/releases/download/v1.0.0/ParLauncher-v1.0.0.apk)** (~۴۳۷ کیلوبایت)
 
 ### ۲. ساخت از روی سورس کد (Build from Source):
 پیش‌نیازها: JDK 17 و Android SDK.
