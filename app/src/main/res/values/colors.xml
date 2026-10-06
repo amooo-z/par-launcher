@@ -6,4 +6,5 @@
     <color name="text_hint">#80FFFFFF</color>
     <color name="accent">#4CAF50</color>
     <color name="item_pressed">#26FFFFFF</color>
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>
